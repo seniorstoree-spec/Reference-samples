@@ -1,0 +1,24 @@
+{
+  "name": "quality-samples-management",
+  "version": "1.1.0",
+  "description": "A smart SPA for managing reference and retention samples, intelligent schedules, and supervisor dashboard.",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx http-server -p 3000",
+    "dev": "npx http-server -c-1 -p 3000",
+    "build": "echo 'No build step required. The app is a static SPA using CDN.' && exit 0"
+  },
+  "keywords": [
+    "quality",
+    "samples",
+    "vue",
+    "spa",
+    "management"
+  ],
+  "author": "Quality Assurance Team",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}

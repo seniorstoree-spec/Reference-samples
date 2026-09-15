@@ -34,7 +34,112 @@
     <script src="data/masterCatalog.js"></script>
 </head>
 <body class="bg-gray-100 text-gray-800 p-8">
-    <div id="app" class="max-w-7xl mx-auto flex flex-col gap-8 relative">
+    <div id="app" class="max-w-7xl mx-auto flex flex-col gap-8 relative h-full">
+
+        <!-- Login Screen -->
+        <div v-if="appView === 'login'" class="fixed inset-0 bg-gray-100 flex items-center justify-center z-[100]">
+            <div class="bg-white p-10 rounded-2xl shadow-2xl w-full max-w-md border border-gray-100 flex flex-col items-center">
+                <svg class="w-20 h-20 text-blue-600 mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                <h2 class="text-3xl font-bold text-gray-800 mb-2">{{ lang === 'ar' ? 'تسجيل الدخول' : 'Login' }}</h2>
+                <p class="text-gray-500 mb-8 text-center text-sm">{{ lang === 'ar' ? 'نظام العينات المرجعية والجودة' : 'Quality Samples System' }}</p>
+                
+                <div v-if="auth.error" class="w-full bg-red-50 text-red-600 px-4 py-3 rounded-lg mb-6 text-sm font-bold border border-red-200 text-center animate-pulse">
+                    {{ auth.error }}
+                </div>
+                
+                <form @submit.prevent="handleLogin" class="w-full flex flex-col gap-5">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">{{ lang === 'ar' ? 'كلمة المرور' : 'Password' }}</label>
+                        <input type="password" v-model="loginForm.password" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow text-center text-xl tracking-widest" dir="ltr" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-lg shadow-md transition-colors text-lg mt-2">
+                        {{ lang === 'ar' ? 'دخول النظام' : 'Enter System' }}
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Admin Dashboard -->
+        <div v-else-if="appView === 'admin'" class="w-full flex flex-col gap-8 animate-fade-in p-8">
+            <header class="bg-gradient-to-r from-gray-900 to-gray-800 p-8 rounded-2xl shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center text-white gap-4">
+                <div>
+                    <h1 class="text-3xl font-bold flex items-center gap-3">
+                        <svg class="w-8 h-8 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        لوحة تحكم المطور
+                    </h1>
+                    <p class="text-gray-300 mt-2 text-sm">إدارة المستخدمين والصلاحيات للنظام</p>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button @click="appView = 'qc'" class="bg-white text-gray-900 hover:bg-gray-100 px-5 py-2.5 rounded-lg font-bold shadow transition flex items-center gap-2 text-sm">
+                        الذهاب للتطبيق
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                    </button>
+                    <button @click="logout" class="bg-red-500 hover:bg-red-600 text-white px-5 py-2.5 rounded-lg font-bold shadow transition flex items-center gap-2 text-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                        تسجيل الخروج
+                    </button>
+                </div>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Add User Form -->
+                <div class="bg-white p-6 rounded-xl shadow border border-gray-200">
+                    <h3 class="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
+                        إضافة مستخدم جديد
+                    </h3>
+                    <form @submit.prevent="addUser" class="flex flex-col gap-4">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">اسم المستخدم</label>
+                            <input type="text" v-model="adminForm.newUsername" class="w-full px-3 py-2 rounded border border-gray-300 focus:ring-2 focus:ring-blue-500" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">كلمة المرور</label>
+                            <input type="text" v-model="adminForm.newPassword" class="w-full px-3 py-2 rounded border border-gray-300 focus:ring-2 focus:ring-blue-500 text-left" dir="ltr" required>
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded shadow mt-2">
+                            حفظ المستخدم
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Users List -->
+                <div class="md:col-span-2 bg-white rounded-xl shadow border border-gray-200 overflow-hidden flex flex-col">
+                    <div class="p-6 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                        <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                            <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                            المستخدمين المسجلين ({{ users.length }})
+                        </h3>
+                    </div>
+                    <div class="overflow-y-auto p-0" style="max-height: 400px;">
+                        <table class="w-full text-start text-sm">
+                            <thead class="bg-gray-100 text-gray-600 sticky top-0">
+                                <tr>
+                                    <th class="p-4 font-bold w-1/3">اسم المستخدم</th>
+                                    <th class="p-4 font-bold w-1/3 text-center">تاريخ الإضافة</th>
+                                    <th class="p-4 font-bold w-1/3 text-center">الإجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr v-if="users.length === 0">
+                                    <td colspan="3" class="p-8 text-center text-gray-400 italic">لا يوجد مستخدمين مسجلين بعد</td>
+                                </tr>
+                                <tr v-for="(u, index) in users" :key="index" class="hover:bg-gray-50 transition-colors">
+                                    <td class="p-4 font-bold text-gray-800">{{ u.username }}</td>
+                                    <td class="p-4 text-center text-gray-500">{{ formatDate(u.createdAt) }}</td>
+                                    <td class="p-4 text-center">
+                                        <button @click="deleteUser(index)" class="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded text-xs font-bold transition">حذف</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main QC Application -->
+        <div v-else-if="appView === 'qc'" class="w-full flex flex-col gap-8 animate-fade-in">
         
         <!-- Header -->
         <header class="bg-white p-6 rounded-lg shadow-md flex justify-between items-start md:items-center flex-col md:flex-row gap-4">
@@ -43,6 +148,11 @@
                 <p class="text-gray-600 mt-2">{{ t('subtitle') }}</p>
             </div>
             <div class="flex flex-col items-end gap-3">
+                <div class="flex items-center gap-2">
+                    <button v-if="auth.role === 'admin'" @click="appView = 'admin'" class="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-3 py-1.5 rounded font-bold text-sm transition">لوحة المطور</button>
+                    <button v-if="auth.role === 'user'" @click="showChangePasswordModal = true" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded font-bold text-sm transition">تغيير كلمة المرور</button>
+                    <button @click="logout" class="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded font-bold text-sm transition">تسجيل الخروج</button>
+                </div>
                 <button @click="toggleLang" class="flex items-center gap-2 bg-blue-100 text-blue-800 px-4 py-2 rounded-full font-bold hover:bg-blue-200 transition shadow-sm border border-blue-200">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path></svg>
                     {{ lang === 'en' ? 'العربية' : 'English' }}
@@ -986,6 +1096,13 @@
                 console.log('[QC Storage Boot] Total samples found in localStorage:', initialSamples.length);
 
                 return {
+                    appView: 'login',
+                    auth: { isAuthenticated: false, role: null, username: null, error: '' },
+                    users: JSON.parse(localStorage.getItem('QC_USERS') || '[]'),
+                    loginForm: { password: '' },
+                    adminForm: { newUsername: '', newPassword: '' },
+                    changePasswordForm: { oldPassword: '', newPassword: '' },
+                    showChangePasswordModal: false,
                     lang: localStorage.getItem('app_language') || 'ar',
                     toast: { show: false, message: '', type: 'success' },
                     productCatalog: initialCatalog,
@@ -1037,6 +1154,16 @@
             
 
             mounted() {
+                const sessionStr = sessionStorage.getItem('QC_SESSION');
+                if (sessionStr) {
+                    try {
+                        const session = JSON.parse(sessionStr);
+                        if (session.isAuthenticated) {
+                            this.auth = session;
+                            this.appView = session.role === 'admin' ? 'admin' : 'qc';
+                        }
+                    } catch(e){}
+                }
                 // Migration: Sync all loaded samples with master catalog rules
                 let migrated = false;
                 this.samples.forEach(sample => {
@@ -1322,6 +1449,67 @@
             beforeUnmount() {
                 },
             methods: {
+                handleLogin() {
+                    this.auth.error = '';
+                    const pwd = this.loginForm.password;
+                    if (pwd === 'admin2026') {
+                        this.auth = { isAuthenticated: true, role: 'admin', username: 'Developer', error: '' };
+                        this.appView = 'admin';
+                    } else {
+                        const user = this.users.find(u => u.password === pwd);
+                        if (user) {
+                            this.auth = { isAuthenticated: true, role: 'user', username: user.username, error: '' };
+                            this.appView = 'qc';
+                        } else {
+                            this.auth.error = this.lang === 'ar' ? 'كلمة المرور غير صحيحة' : 'Incorrect Password';
+                            return;
+                        }
+                    }
+                    sessionStorage.setItem('QC_SESSION', JSON.stringify(this.auth));
+                    this.loginForm.password = '';
+                },
+                logout() {
+                    this.auth = { isAuthenticated: false, role: null, username: null, error: '' };
+                    this.appView = 'login';
+                    sessionStorage.removeItem('QC_SESSION');
+                },
+                addUser() {
+                    const uname = this.adminForm.newUsername.trim();
+                    const pwd = this.adminForm.newPassword.trim();
+                    if (!uname || !pwd) return;
+                    if (this.users.some(u => u.username === uname)) {
+                        alert(this.lang === 'ar' ? 'اسم المستخدم موجود بالفعل' : 'Username already exists');
+                        return;
+                    }
+                    this.users.push({ username: uname, password: pwd, createdAt: new Date().toISOString() });
+                    localStorage.setItem('QC_USERS', JSON.stringify(this.users));
+                    this.adminForm.newUsername = '';
+                    this.adminForm.newPassword = '';
+                    this.showToast(this.lang === 'ar' ? 'تم إضافة المستخدم بنجاح' : 'User added successfully');
+                },
+                deleteUser(index) {
+                    if(confirm(this.lang === 'ar' ? 'هل أنت متأكد من حذف هذا المستخدم؟' : 'Are you sure you want to delete this user?')) {
+                        this.users.splice(index, 1);
+                        localStorage.setItem('QC_USERS', JSON.stringify(this.users));
+                        this.showToast(this.lang === 'ar' ? 'تم حذف المستخدم' : 'User deleted');
+                    }
+                },
+                changePassword() {
+                    const userIndex = this.users.findIndex(u => u.username === this.auth.username && u.password === this.changePasswordForm.oldPassword);
+                    if (userIndex === -1) {
+                        alert(this.lang === 'ar' ? 'كلمة المرور الحالية غير صحيحة' : 'Current password incorrect');
+                        return;
+                    }
+                    if (!this.changePasswordForm.newPassword.trim()) return;
+                    
+                    this.users[userIndex].password = this.changePasswordForm.newPassword.trim();
+                    localStorage.setItem('QC_USERS', JSON.stringify(this.users));
+                    
+                    this.showChangePasswordModal = false;
+                    this.changePasswordForm.oldPassword = '';
+                    this.changePasswordForm.newPassword = '';
+                    this.showToast(this.lang === 'ar' ? 'تم تغيير كلمة المرور بنجاح' : 'Password changed successfully');
+                },
                 saveSampleNotes(sample) {
                     if (sample && typeof sample.notes === 'string') {
                         sample.notes = sample.notes.trim();

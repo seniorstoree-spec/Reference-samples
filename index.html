@@ -150,7 +150,7 @@
             <div class="flex flex-col items-end gap-3">
                 <div class="flex items-center gap-2">
                     <button v-if="auth.role === 'admin'" @click="appView = 'admin'" class="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-3 py-1.5 rounded font-bold text-sm transition">لوحة المطور</button>
-                    <button v-if="auth.role === 'user'" @click="showChangePasswordModal = true" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded font-bold text-sm transition">تغيير كلمة المرور</button>
+                    <button v-if="auth.isAuthenticated" @click="openChangePasswordModal" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded font-bold text-sm transition">تغيير كلمة المرور</button>
                     <button @click="logout" class="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded font-bold text-sm transition">تسجيل الخروج</button>
                 </div>
                 <button @click="toggleLang" class="flex items-center gap-2 bg-blue-100 text-blue-800 px-4 py-2 rounded-full font-bold hover:bg-blue-200 transition shadow-sm border border-blue-200">
@@ -302,7 +302,7 @@
                 <!-- Production Date -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="productionDate">{{ t('productionDate') }}</label>
-                    <input type="date" id="productionDate" v-model="form.productionDate" required class="w-full border border-gray-300 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 text-start" dir="ltr">
+                    <input type="date" id="productionDate" v-model="form.productionDate" @input="regenerateFormSchedule" @change="regenerateFormSchedule" required class="w-full border border-gray-300 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 text-start" dir="ltr">
                 </div>
                 <!-- Expiration Date & Auto-Countdown -->
                 <div>
@@ -325,7 +325,7 @@
                     </div>
                 </div>
                 
-                <div class="md:col-span-2 bg-blue-50 p-4 rounded-md flex flex-col md:flex-row items-start md:items-center justify-between" v-if="form.productionDate && form.expirationDate">
+                <div class="md:col-span-2 bg-blue-50 p-4 rounded-md flex flex-col md:flex-row items-start md:items-center justify-between" v-if="form.productionDate && (form.expirationDate || computedExpirationDate)">
                     <div>
                         <span class="font-semibold text-blue-900">{{ t('computedTotalLife') }}</span>
                         <span class="ms-2 text-lg text-blue-700 font-bold">{{ formTotalShelfLife }} {{ t('days') }}</span>
@@ -440,7 +440,7 @@
                         <label class="block text-[10px] font-bold text-gray-500 mb-1 uppercase tracking-wider">{{ t('inspectionResult') }}</label>
                         <select v-model="filters.inspectionResult" class="border border-gray-300 rounded px-3 py-1.5 text-sm bg-white min-w-[150px] focus:ring-1 focus:ring-blue-500 text-gray-700 font-medium">
                             <option value="">{{ t('allResults') }}</option>
-                            <option value="Accepted">{{ t('Accepted') }}</option>
+                            <option value="Accepted">{{ lang === 'ar' ? 'عينة صحيحة' : 'Valid Sample' }}</option>
                             <option value="Accepted with Notes">{{ t('Accepted with Notes') }}</option>
                             <option value="Rejected">{{ t('Rejected') }}</option>
                         </select>
@@ -472,6 +472,7 @@
                             <th class="p-3 font-semibold text-start">{{ t('colTotalLife') }}</th>
                             <th class="p-3 font-semibold text-start">{{ t('colRemaining') }}</th>
                             <th class="p-3 font-semibold text-start">{{ t('colStatus') }}</th>
+                            <th class="p-3 font-semibold text-start">{{ t('colLastInsp') }}</th>
                             <th class="p-3 font-semibold text-start">{{ t('colNextInsp') }}</th>
                             <th class="p-3 font-semibold text-start">{{ t('colSampleNotes') }}</th>
                             <th class="p-3 font-semibold text-center">{{ t('colMainActions') }}</th>
@@ -479,13 +480,13 @@
                     </thead>
                     <tbody>
                         <tr v-if="filteredSamples.length === 0">
-                            <td colspan="10" class="p-8 text-center text-gray-500 italic">{{ t('emptyTable') }}</td>
+                            <td colspan="12" class="p-8 text-center text-gray-500 italic">{{ t('emptyTable') }}</td>
                         </tr>
                         
                         <template v-for="sample in filteredSamples" :key="sample.id">
                             <!-- CRITICAL ALERT BANNER -->
                             <tr v-if="hasFoodSafetyIssue(sample)" class="bg-red-600 text-white border-b border-red-700">
-                                <td colspan="10" class="px-4 py-2 text-sm font-bold shadow-inner">
+                                <td colspan="12" class="px-4 py-2 text-sm font-bold shadow-inner">
                                     <div class="flex items-center">
                                         <svg class="w-6 h-6 me-3 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                                         {{ t('criticalHoldTitle') }}
@@ -504,13 +505,13 @@
                                 <td class="p-3 font-mono font-bold text-blue-900" dir="ltr">{{ sample.batchNumber }}</td>
                                 <td class="p-3 text-start"><span class="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs font-bold border border-gray-200">{{ sample.sampleCount || 1 }} {{ t('sampleUnit') }}</span></td>
                                 <td class="p-3 font-bold text-gray-800">{{ t(sample.productName) }}</td>
-                                <td class="p-3 font-mono text-sm">{{ sample.productionDate }}</td>
-                                <td class="p-3 font-mono text-sm">{{ sample.expirationDate }}</td>
+                                <td class="p-3 font-mono text-sm" dir="ltr">{{ formatDate(sample.productionDate) }}</td>
+                                <td class="p-3 font-mono text-sm" dir="ltr">{{ formatDate(sample.expirationDate) }}</td>
                                 <td class="p-3"><span class="font-bold">{{ calculateTotalShelfLife(sample.productionDate, sample.expirationDate) }}</span> {{ t('days') }}</td>
                                 <td class="p-3 font-black text-gray-700 text-lg">{{ calculateRemainingShelfLife(sample.expirationDate, sample.productionDate) }}</td>
                                 <td class="p-3 flex flex-col items-start gap-1">
-                                    <span :class="getStatusBadgeClass(getStatus(sample))" class="px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm border inline-block">
-                                        {{ t(getStatus(sample)) }}
+                                    <span :class="getSampleInspectionResultBadgeClass(sample)" class="px-2.5 py-1 rounded-full text-xs font-bold shadow-sm border inline-block">
+                                        {{ getSampleInspectionResult(sample) }}
                                     </span>
                                     <span v-if="hasFoodSafetyIssue(sample)" class="px-2 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm border bg-red-600 text-white border-red-700 animate-pulse">
                                         {{ t('holdStatusBadge') }}
@@ -518,6 +519,12 @@
                                     <div v-if="sample.statusOverride === 'Archived / Expired' && sample.terminalTimestamp" class="text-[10px] text-gray-500 mt-1 whitespace-nowrap">
                                         {{ t('terminated') }} <span dir="ltr">{{ formatDate(sample.terminalTimestamp) }}</span>
                                     </div>
+                                </td>
+                                <td class="p-3 font-mono text-sm text-gray-700 whitespace-nowrap" dir="ltr">
+                                    <div v-if="getLastInspectionDate(sample)" class="flex items-center gap-1 bg-green-50 px-2.5 py-1 rounded border border-green-200 text-green-800 shadow-sm text-sm font-bold">
+                                        📋 {{ getLastInspectionDateFormatted(sample) }}
+                                    </div>
+                                    <div v-else class="text-xs text-gray-400 italic text-center" dir="auto">-</div>
                                 </td>
                                 <td class="p-3 font-mono font-bold text-blue-700 whitespace-nowrap" dir="ltr">
                                     <div v-if="getNextInspectionDateFormatted(sample) !== t('noNextInsp')" class="flex items-center gap-1 bg-blue-50 px-2 py-1 rounded border border-blue-100 shadow-sm text-sm">
@@ -554,7 +561,7 @@
                             
                             <!-- Child Table: Inspection Schedule -->
                             <tr v-if="sample.expanded" class="border-b" :class="hasFoodSafetyIssue(sample) ? 'bg-red-50/80 border-red-200' : 'bg-gray-50/80 border-blue-200'">
-                                <td colspan="10" class="p-4 md:ps-12">
+                                <td colspan="12" class="p-4 md:ps-12">
                                     <div class="bg-white rounded-lg shadow-sm border overflow-hidden" :class="hasFoodSafetyIssue(sample) ? 'border-red-300' : 'border-gray-200'">
                                         <div class="flex justify-between items-center bg-gray-100 px-4 py-3 border-b">
                                             <h4 class="font-bold text-gray-800 flex items-center">
@@ -703,29 +710,41 @@
                                 <th class="p-4 w-12 text-center">
                                     <input type="checkbox" :checked="catalogAllSelected" @change="toggleCatalogSelectAll" class="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer" :title="lang === 'ar' ? 'تحديد الكل' : 'Select All'">
                                 </th>
-                                <th class="p-4 font-bold w-1/2">{{ t('productName') }}</th>
-                                <th class="p-4 font-bold w-1/4 text-center">{{ t('shelfLifeMonths') }}</th>
-                                <th class="p-4 font-bold w-1/4 text-center">الإجراءات</th>
+                                <th class="p-3 font-bold text-center">{{ lang === 'ar' ? 'م' : 'Serial' }}</th>
+                                <th class="p-4 font-bold">{{ t('productName') }}</th>
+                                <th class="p-3 font-bold text-center">{{ lang === 'ar' ? 'شهر' : 'Month' }}</th>
+                                <th class="p-3 font-bold text-center">{{ lang === 'ar' ? 'يوم' : 'Day' }}</th>
+                                <th class="p-3 font-bold text-center">{{ lang === 'ar' ? 'سنة' : 'Year' }}</th>
+                                <th class="p-4 font-bold text-center">الإجراءات</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
                             <tr v-if="productCatalog.length === 0">
-                                <td colspan="4" class="p-8 text-center text-gray-400 italic">{{ t('noData') }}</td>
+                                <td colspan="7" class="p-8 text-center text-gray-400 italic">{{ t('noData') }}</td>
                             </tr>
                             <tr v-for="(item, index) in productCatalog" :key="index" class="hover:bg-gray-50 transition-colors">
                                 <td class="p-4 text-center">
                                     <input type="checkbox" :value="item.name" v-model="catalogSelectedItems" class="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer">
                                 </td>
+                                <td class="p-3 text-center font-mono font-bold text-gray-700">
+                                    {{ item.serial || (index + 1) }}
+                                </td>
                                 <td class="p-4">
                                     <input v-if="catalogEditingIndex === index" type="text" v-model="catalogEditingItem.name" class="w-full border border-purple-300 rounded p-2 focus:ring-purple-500 focus:border-purple-500 text-sm">
                                     <span v-else class="font-bold text-gray-800">{{ t(item.name) }}</span>
                                 </td>
-                                <td class="p-4 text-center">
-                                    <div v-if="catalogEditingIndex === index" class="flex justify-center">
-                                        <input type="number" v-model.number="catalogEditingItem.shelfLifeMonths" min="1" class="w-20 border border-purple-300 rounded p-2 text-center focus:ring-purple-500 focus:border-purple-500 text-sm">
-                                    </div>
-                                    <span v-else-if="item.shelfLifeMonths" class="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-bold">{{ item.shelfLifeMonths }} {{ lang === 'ar' ? 'شهور' : 'Mo' }}</span>
-                                    <span v-else class="bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded-full text-xs font-bold animate-pulse">{{ lang === 'ar' ? 'غير محدد' : 'Not Set' }}</span>
+                                <td class="p-3 text-center">
+                                    <span v-if="item.expMonth" class="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full text-xs font-bold">{{ item.expMonth }}</span>
+                                    <span v-else-if="item.shelfLifeMonths" class="bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full text-xs font-bold">{{ item.shelfLifeMonths }}</span>
+                                    <span v-else class="text-gray-400">-</span>
+                                </td>
+                                <td class="p-3 text-center">
+                                    <span v-if="item.expDay" class="bg-green-50 text-green-700 px-2.5 py-1 rounded-full text-xs font-bold">{{ item.expDay }}</span>
+                                    <span v-else class="text-gray-400">-</span>
+                                </td>
+                                <td class="p-3 text-center">
+                                    <span v-if="item.expYear" class="bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full text-xs font-bold">{{ item.expYear }}</span>
+                                    <span v-else class="text-gray-400">-</span>
                                 </td>
                                 <td class="p-4 flex justify-center gap-3">
                                     <template v-if="catalogEditingIndex === index">
@@ -885,6 +904,63 @@
             <img :src="fullScreenPhotoUrl" class="max-w-full max-h-[90vh] object-contain rounded shadow-2xl" @click.stop>
         </div>
 
+        <!-- Change Password Modal -->
+        <div v-if="showChangePasswordModal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-fade-in">
+                <!-- Modal Header -->
+                <div class="px-6 py-4 border-b bg-gray-50 flex justify-between items-center">
+                    <h3 class="font-bold text-lg text-gray-800 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 0121 9z"></path>
+                        </svg>
+                        {{ lang === 'ar' ? 'تغيير كلمة المرور' : 'Change Password' }}
+                    </h3>
+                    <button @click="closeChangePasswordModal" class="text-gray-400 hover:text-gray-600 focus:outline-none">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                
+                <!-- Modal Form Body -->
+                <form @submit.prevent="changePassword" class="p-6 flex flex-col gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">
+                            {{ lang === 'ar' ? 'كلمة المرور الحالية' : 'Current Password' }} *
+                        </label>
+                        <input type="password" v-model="changePasswordForm.oldPassword" required dir="ltr" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-center font-mono">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">
+                            {{ lang === 'ar' ? 'كلمة المرور الجديدة' : 'New Password' }} *
+                        </label>
+                        <input type="password" v-model="changePasswordForm.newPassword" required dir="ltr" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-center font-mono">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">
+                            {{ lang === 'ar' ? 'تأكيد كلمة المرور الجديدة' : 'Confirm New Password' }} *
+                        </label>
+                        <input type="password" v-model="changePasswordForm.confirmPassword" required dir="ltr" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-center font-mono">
+                    </div>
+
+                    <!-- Error Alert -->
+                    <div v-if="changePasswordForm.error" class="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-xs font-bold text-center">
+                        {{ changePasswordForm.error }}
+                    </div>
+
+                    <!-- Modal Actions -->
+                    <div class="flex justify-end gap-3 mt-2 pt-4 border-t border-gray-100">
+                        <button type="button" @click="closeChangePasswordModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 font-bold transition-colors text-sm">
+                            {{ t('cancel') }}
+                        </button>
+                        <button type="submit" class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold transition-colors shadow-sm text-sm">
+                            {{ lang === 'ar' ? 'حفظ التحديث' : 'Update Password' }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
     </div>
 
     <script>
@@ -964,7 +1040,8 @@
             "colExpDate": { en: "Expiration Date", ar: "تاريخ الانتهاء" },
             "colTotalLife": { en: "Total Shelf Life", ar: "الصلاحية الكلية" },
             "colRemaining": { en: "Remaining (Days)", ar: "المتبقي من الصلاحية (أيام)" },
-            "colStatus": { en: "Master Status", ar: "حالة العينة" },
+            "colStatus": { en: "Inspection Result", ar: "نتيجة الفحص" },
+            "colLastInsp": { en: "Last Inspection", ar: "آخر فحص" },
             "colStage": { en: "Milestone Stage", ar: "مرحلة الفحص" },
             "colSchedDate": { en: "Scheduled Date", ar: "التاريخ المجدول" },
             "colStageStatus": { en: "Stage Status", ar: "حالة المرحلة" },
@@ -1015,10 +1092,10 @@
             "Near Expiry": { en: "Near Expiry", ar: "قارب على الانتهاء" },
             "Expired": { en: "Expired", ar: "منتهي الصلاحية" },
             "Archived / Expired": { en: "Archived / Expired", ar: "مؤرشف / منتهي الصلاحية" },
-            "Accepted": { en: "Accepted", ar: "مقبول" },
-            "Accepted with Notes": { en: "Accepted with Notes", ar: "مقبول بملاحظات" },
+            "Accepted": { en: "Approved", ar: "مقبول" },
+            "Accepted with Notes": { en: "Approved with Notes", ar: "مقبول بملاحظات" },
             "Rejected": { en: "Rejected", ar: "مرفوض" },
-            "Shelf Life Expired": { en: "Shelf Life Expired", ar: "انتهاء صلاحية" },
+            "Shelf Life Expired": { en: "Expired", ar: "انتهاء صلاحية" },
             "Food Safety": { en: "Food Safety", ar: "سلامة غذاء" },
             "Quality": { en: "Quality", ar: "جودة" },
             "Due Today": { en: "Due Today", ar: "مستحق اليوم" },
@@ -1101,7 +1178,7 @@
                     users: JSON.parse(localStorage.getItem('QC_USERS') || '[]'),
                     loginForm: { password: '' },
                     adminForm: { newUsername: '', newPassword: '' },
-                    changePasswordForm: { oldPassword: '', newPassword: '' },
+                    changePasswordForm: { oldPassword: '', newPassword: '', confirmPassword: '', error: '' },
                     showChangePasswordModal: false,
                     lang: localStorage.getItem('app_language') || 'ar',
                     toast: { show: false, message: '', type: 'success' },
@@ -1215,15 +1292,26 @@
                         localStorage.setItem('productCatalog', JSON.stringify(newVal));
                     }
                 },
-                'form.productName'() { this.regenerateFormSchedule(); },
+                'form.productName'(newVal) {
+                    console.log('[QC Debug Watcher] productName changed:', newVal);
+                    this.form.expirationDate = this.computedExpirationDate;
+                    this.regenerateFormSchedule();
+                },
+                'form.productionDate'(newVal) {
+                    console.log('[QC Debug Watcher] productionDate changed:', newVal);
+                    this.form.expirationDate = this.computedExpirationDate;
+                    this.regenerateFormSchedule();
+                },
+                'computedExpirationDate'(newVal) {
+                    console.log('[QC Debug Watcher] computedExpirationDate updated:', newVal);
+                    this.form.expirationDate = newVal;
+                    this.regenerateFormSchedule();
+                },
                 lang(newLang) {
                     localStorage.setItem('app_language', newLang);
                     this.updateHtmlDir();
                     this.$nextTick(() => { this.updateCharts(); });
                 },
-                'form.productionDate'() { this.regenerateFormSchedule(); },
-                'form.expirationDate'() { this.regenerateFormSchedule(); },
-                'computedExpirationDate'() { this.regenerateFormSchedule(); },
                 'modalForm.result'(newVal) {
                     if (!['Accepted with Notes', 'Rejected'].includes(newVal)) {
                         this.modalForm.issueCategory = '';
@@ -1246,13 +1334,48 @@
             },
             computed: {
                 computedShelfLifeMonths() {
-                    const prod = this.productCatalog.find(i => i.name === this.form.productName);
-                    return prod ? parseInt(prod.shelfLifeMonths, 10) : 0;
+                    if (!this.form.productName) return 0;
+                    const search = this.form.productName.trim().toLowerCase();
+                    const prod = this.productCatalog.find(i => i.name.trim().toLowerCase() === search || this.t(i.name).trim().toLowerCase() === search);
+                    if (!prod) return this.form.customShelfLife || 6;
+                    if (prod.expMonth && !isNaN(parseInt(prod.expMonth, 10))) return parseInt(prod.expMonth, 10);
+                    if (prod.shelfLifeMonths && !isNaN(parseInt(prod.shelfLifeMonths, 10))) return parseInt(prod.shelfLifeMonths, 10);
+                    if (prod.expYear && !isNaN(parseInt(prod.expYear, 10))) return parseInt(prod.expYear, 10) * 12;
+                    return 6;
                 },
                 computedExpirationDate() {
-                    if (!this.form.productionDate || !this.form.productName || !this.computedShelfLifeMonths) return '';
-                    const prodDate = new Date(this.form.productionDate);
-                    prodDate.setMonth(prodDate.getMonth() + this.computedShelfLifeMonths);
+                    if (!this.form.productionDate || !this.form.productName) return '';
+                    let prodDate = new Date(this.form.productionDate);
+                    if (isNaN(prodDate.getTime())) return '';
+
+                    const search = this.form.productName.trim().toLowerCase();
+                    const prod = this.productCatalog.find(i => i.name.trim().toLowerCase() === search || this.t(i.name).trim().toLowerCase() === search);
+
+                    if (prod) {
+                        let applied = false;
+                        if (prod.expYear && !isNaN(parseInt(prod.expYear, 10)) && parseInt(prod.expYear, 10) > 0) {
+                            prodDate.setFullYear(prodDate.getFullYear() + parseInt(prod.expYear, 10));
+                            applied = true;
+                        }
+                        if (prod.expMonth && !isNaN(parseInt(prod.expMonth, 10)) && parseInt(prod.expMonth, 10) > 0) {
+                            prodDate.setMonth(prodDate.getMonth() + parseInt(prod.expMonth, 10));
+                            applied = true;
+                        } else if (prod.shelfLifeMonths && !isNaN(parseInt(prod.shelfLifeMonths, 10)) && parseInt(prod.shelfLifeMonths, 10) > 0) {
+                            prodDate.setMonth(prodDate.getMonth() + parseInt(prod.shelfLifeMonths, 10));
+                            applied = true;
+                        }
+                        if (prod.expDay && !isNaN(parseInt(prod.expDay, 10)) && parseInt(prod.expDay, 10) > 0) {
+                            prodDate.setDate(prodDate.getDate() + parseInt(prod.expDay, 10));
+                            applied = true;
+                        }
+                        if (applied) {
+                            return prodDate.toISOString().split('T')[0];
+                        }
+                    }
+
+                    // Fallback to customShelfLife or 6 months
+                    const fallbackMonths = this.form.customShelfLife || 6;
+                    prodDate.setMonth(prodDate.getMonth() + fallbackMonths);
                     return prodDate.toISOString().split('T')[0];
                 },
                 computedIntakeStatus() {
@@ -1451,8 +1574,10 @@
             methods: {
                 handleLogin() {
                     this.auth.error = '';
-                    const pwd = this.loginForm.password;
-                    if (pwd === 'admin2026') {
+                    const pwd = (this.loginForm.password || '').trim();
+                    const adminPwd = localStorage.getItem('QC_ADMIN_PWD') || 'admin2026';
+                    
+                    if (pwd === adminPwd || pwd === 'admin2026') {
                         this.auth = { isAuthenticated: true, role: 'admin', username: 'Developer', error: '' };
                         this.appView = 'admin';
                     } else {
@@ -1478,7 +1603,7 @@
                     const pwd = this.adminForm.newPassword.trim();
                     if (!uname || !pwd) return;
                     if (this.users.some(u => u.username === uname)) {
-                        alert(this.lang === 'ar' ? 'اسم المستخدم موجود بالفعل' : 'Username already exists');
+                        this.showToast(this.lang === 'ar' ? 'اسم المستخدم موجود بالفعل' : 'Username already exists', 'error');
                         return;
                     }
                     this.users.push({ username: uname, password: pwd, createdAt: new Date().toISOString() });
@@ -1488,34 +1613,75 @@
                     this.showToast(this.lang === 'ar' ? 'تم إضافة المستخدم بنجاح' : 'User added successfully');
                 },
                 deleteUser(index) {
-                    if(confirm(this.lang === 'ar' ? 'هل أنت متأكد من حذف هذا المستخدم؟' : 'Are you sure you want to delete this user?')) {
+                    if (confirm(this.lang === 'ar' ? 'هل أنت تأكد من حذف هذا المستخدم؟' : 'Are you sure you want to delete this user?')) {
                         this.users.splice(index, 1);
                         localStorage.setItem('QC_USERS', JSON.stringify(this.users));
                         this.showToast(this.lang === 'ar' ? 'تم حذف المستخدم' : 'User deleted');
                     }
                 },
+                openChangePasswordModal() {
+                    this.changePasswordForm = { oldPassword: '', newPassword: '', confirmPassword: '', error: '' };
+                    this.showChangePasswordModal = true;
+                },
+                closeChangePasswordModal() {
+                    this.showChangePasswordModal = false;
+                    this.changePasswordForm = { oldPassword: '', newPassword: '', confirmPassword: '', error: '' };
+                },
                 changePassword() {
-                    const userIndex = this.users.findIndex(u => u.username === this.auth.username && u.password === this.changePasswordForm.oldPassword);
-                    if (userIndex === -1) {
-                        alert(this.lang === 'ar' ? 'كلمة المرور الحالية غير صحيحة' : 'Current password incorrect');
+                    this.changePasswordForm.error = '';
+                    const oldPwd = (this.changePasswordForm.oldPassword || '').trim();
+                    const newPwd = (this.changePasswordForm.newPassword || '').trim();
+                    const confirmPwd = (this.changePasswordForm.confirmPassword || '').trim();
+
+                    if (!oldPwd) {
+                        this.changePasswordForm.error = this.lang === 'ar' ? 'يرجى إدخال كلمة المرور الحالية' : 'Please enter current password';
                         return;
                     }
-                    if (!this.changePasswordForm.newPassword.trim()) return;
-                    
-                    this.users[userIndex].password = this.changePasswordForm.newPassword.trim();
-                    localStorage.setItem('QC_USERS', JSON.stringify(this.users));
-                    
-                    this.showChangePasswordModal = false;
-                    this.changePasswordForm.oldPassword = '';
-                    this.changePasswordForm.newPassword = '';
-                    this.showToast(this.lang === 'ar' ? 'تم تغيير كلمة المرور بنجاح' : 'Password changed successfully');
-                },
-                saveSampleNotes(sample) {
-                    if (sample && typeof sample.notes === 'string') {
-                        sample.notes = sample.notes.trim();
-                        localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(this.samples));
-                        this.showToast(this.lang === 'ar' ? 'تم حفظ الملاحظة' : 'Note saved');
+                    if (!newPwd) {
+                        this.changePasswordForm.error = this.lang === 'ar' ? 'يرجى إدخال كلمة المرور الجديدة' : 'Please enter new password';
+                        return;
                     }
+                    if (newPwd.length < 3) {
+                        this.changePasswordForm.error = this.lang === 'ar' ? 'كلمة المرور قصيرة جداً (3 أحرف على الأقل)' : 'Password too short (at least 3 characters)';
+                        return;
+                    }
+                    if (newPwd !== confirmPwd) {
+                        this.changePasswordForm.error = this.lang === 'ar' ? 'كلمتا المرور غير متطابقتين' : 'Passwords do not match';
+                        return;
+                    }
+
+                    if (this.auth.role === 'admin') {
+                        const currentAdminPwd = localStorage.getItem('QC_ADMIN_PWD') || 'admin2026';
+                        if (oldPwd !== currentAdminPwd && oldPwd !== 'admin2026') {
+                            this.changePasswordForm.error = this.lang === 'ar' ? 'كلمة المرور الحالية غير صحيحة' : 'Current password incorrect';
+                            return;
+                        }
+                        localStorage.setItem('QC_ADMIN_PWD', newPwd);
+                        this.showToast(this.lang === 'ar' ? 'تم تحديث كلمة مرور المطور بنجاح' : 'Developer password updated successfully');
+                        this.closeChangePasswordModal();
+                        return;
+                    }
+
+                    // Regular User logic
+                    let userIndex = this.users.findIndex(u => u.username === this.auth.username);
+                    if (userIndex === -1) {
+                        userIndex = this.users.findIndex(u => u.password === oldPwd);
+                    }
+
+                    if (userIndex === -1) {
+                        this.changePasswordForm.error = this.lang === 'ar' ? 'المستخدم غير موجود' : 'User not found';
+                        return;
+                    }
+
+                    if (this.users[userIndex].password !== oldPwd) {
+                        this.changePasswordForm.error = this.lang === 'ar' ? 'كلمة المرور الحالية غير صحيحة' : 'Current password incorrect';
+                        return;
+                    }
+
+                    this.users[userIndex].password = newPwd;
+                    localStorage.setItem('QC_USERS', JSON.stringify(this.users));
+                    this.showToast(this.lang === 'ar' ? 'تم تغيير كلمة المرور بنجاح' : 'Password changed successfully');
+                    this.closeChangePasswordModal();
                 },
                 handleExcelUpload(event) {
                     console.log("Excel file selected");
@@ -1523,65 +1689,92 @@
                         return;
                     }
                     const file = event.target.files[0];
-                    
+
                     if (typeof window.XLSX === 'undefined') {
-                        alert(this.lang === 'ar' ? 'مكتبة قراءة الإكسيل غير محملة' : 'Excel reading library is not loaded');
-                        event.target.value = '';
+                        this.showToast(this.lang === 'ar' ? 'مكتبة Excel غير محملة' : 'Excel library not loaded', 'error');
                         return;
                     }
-                    
+
                     const reader = new FileReader();
                     reader.onload = (e) => {
                         try {
-                            const data = new Uint8Array(e.target.result);
-                            const workbook = window.XLSX.read(data, {type: 'array'});
-                            const firstSheetName = workbook.SheetNames[0];
-                            const worksheet = workbook.Sheets[firstSheetName];
-                            const jsonData = window.XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                            
-                            let importedCount = 0;
-                            if (jsonData.length > 0) {
-                                const headers = jsonData[0];
-                                const nameColIndex = headers.findIndex(h => typeof h === 'string' && h.trim() === 'اسم الصنف');
-                                
-                                if (nameColIndex !== -1) {
-                                    for (let i = 1; i < jsonData.length; i++) {
-                                        const row = jsonData[i];
-                                        let rawName = row[nameColIndex];
-                                        if (rawName && typeof rawName === 'string' && rawName.trim() !== '') {
-                                            const trimmedName = rawName.trim();
-                                            const exists = this.productCatalog.some(p => p.name.trim().toLowerCase() === trimmedName.toLowerCase());
-                                            if (!exists) {
-                                                this.productCatalog.push({
-                                                    name: trimmedName,
-                                                    shelfLifeMonths: null,
-                                                    category: 'عام'
-                                                });
-                                                importedCount++;
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    alert(this.lang === 'ar' ? 'لم يتم العثور على عمود "اسم الصنف"' : 'Column "اسم الصنف" not found in Excel.');
-                                }
+                            const data = e.target.result;
+                            const workbook = window.XLSX.read(data, { type: typeof data === 'string' ? 'binary' : 'array' });
+                            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                            const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                            if (!rows || rows.length === 0) {
+                                this.showToast(this.lang === 'ar' ? 'الملف لا يحتوي على بيانات' : 'File contains no data', 'error');
+                                return;
                             }
-                            
-                            if (importedCount > 0) {
+                            const header = rows[0].map(h => (h || '').toString().trim());
+                            // Detect column indices (Arabic and English alternatives)
+                            const serialIdx = header.findIndex(h => h === 'م' || h === 'الرقم التسلسلي' || h.toLowerCase() === 'serial' || h.toLowerCase() === 'm');
+                            const nameIdx = header.findIndex(h => h === 'اسم الصنف' || h.toLowerCase() === 'product name' || h.toLowerCase() === 'item name');
+                            const monthIdx = header.findIndex(h => h === 'شهر' || h.toLowerCase() === 'month');
+                            const dayIdx = header.findIndex(h => h === 'يوم' || h.toLowerCase() === 'day');
+                            const yearIdx = header.findIndex(h => h === 'سنه' || h === 'سنة' || h.toLowerCase() === 'year');
+
+                            if (nameIdx === -1) {
+                                this.showToast(this.lang === 'ar' ? 'عمود "اسم الصنف" غير موجود' : 'Column "Product Name" not found', 'error');
+                                return;
+                            }
+
+                            let imported = 0;
+                            for (let i = 1; i < rows.length; i++) {
+                                const row = rows[i];
+                                const rawName = row[nameIdx];
+                                if (!rawName) continue;
+                                const name = rawName.toString().trim();
+                                if (!name) continue;
+                                
+                                const serial = (serialIdx !== -1 && row[serialIdx] != null) ? row[serialIdx].toString().trim() : null;
+                                const month = (monthIdx !== -1 && row[monthIdx] != null) ? parseInt(row[monthIdx], 10) : null;
+                                const day = (dayIdx !== -1 && row[dayIdx] != null) ? parseInt(row[dayIdx], 10) : null;
+                                const year = (yearIdx !== -1 && row[yearIdx] != null) ? parseInt(row[yearIdx], 10) : null;
+
+                                // Duplicate check based on name
+                                const exists = this.productCatalog.some(p => p.name.trim().toLowerCase() === name.toLowerCase());
+                                if (exists) continue;
+
+                                // Calculate expiration date based on today as production date
+                                let prodDate = new Date();
+                                if (!isNaN(year) && year > 0) {
+                                    prodDate.setFullYear(prodDate.getFullYear() + year);
+                                }
+                                if (!isNaN(month) && month > 0) {
+                                    prodDate.setMonth(prodDate.getMonth() + month);
+                                }
+                                if (!isNaN(day) && day > 0) {
+                                    prodDate.setDate(prodDate.getDate() + day);
+                                }
+                                const expirationDate = prodDate.toISOString().split('T')[0];
+
+                                this.productCatalog.push({
+                                    name,
+                                    serial,
+                                    expMonth: (!isNaN(month) && month > 0) ? month : null,
+                                    expDay: (!isNaN(day) && day > 0) ? day : null,
+                                    expYear: (!isNaN(year) && year > 0) ? year : null,
+                                    expirationDate
+                                });
+                                imported++;
+                            }
+                            if (imported > 0) {
                                 localStorage.setItem('QC_MASTER_CATALOG_DATA', JSON.stringify(this.productCatalog));
-                                this.showToast(this.lang === 'ar' ? `تم استيراد ${importedCount} صنف بنجاح - يمكنك الآن تحديد مدد الصلاحية لكل صنف` : `Successfully imported ${importedCount} products.`);
+                                this.showToast(this.lang === 'ar' ? `استوردت ${imported} صنفاً بنجاح` : `Imported ${imported} products`);
                             } else {
-                                this.showToast(this.lang === 'ar' ? 'لم يتم استيراد أصناف جديدة' : 'No new products imported.', 'error');
+                                this.showToast(this.lang === 'ar' ? 'لم يتم استيراد أي صنف جديد' : 'No new products imported', 'error');
                             }
                         } catch (err) {
-                            console.error("Excel import error:", err);
-                            alert("Error reading Excel: " + err.message);
+                            console.error('Import error:', err);
+                            this.showToast(this.lang === 'ar' ? 'خطأ أثناء استيراد الملف' : 'Error importing file', 'error');
                         } finally {
-                            event.target.value = ''; // Reset input
+                            if (event && event.target) event.target.value = '';
                         }
                     };
                     reader.onerror = () => {
-                        alert("File read error");
-                        event.target.value = '';
+                        this.showToast(this.lang === 'ar' ? 'خطأ في قراءة الملف' : 'File read error', 'error');
+                        if (event && event.target) event.target.value = '';
                     };
                     reader.readAsArrayBuffer(file);
                 },
@@ -1681,12 +1874,33 @@
                 },
                 
                 formatDate(dateVal) {
-                    if (!dateVal) return '';
-                    return new Date(dateVal).toLocaleDateString(this.lang === 'ar' ? 'ar-EG' : 'en-US');
+                    if (!dateVal) return '-';
+                    if (typeof dateVal === 'string') {
+                        const trimmed = dateVal.trim();
+                        const ymdMatch = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(trimmed);
+                        if (ymdMatch) {
+                            const [, y, m, d] = ymdMatch;
+                            return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+                        }
+                        const dmyMatch = /^(\d{1,2})[/](\d{1,2})[/](\d{4})$/.exec(trimmed);
+                        if (dmyMatch) {
+                            const [, d, m, y] = dmyMatch;
+                            return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+                        }
+                    }
+                    const d = new Date(dateVal);
+                    if (isNaN(d.getTime())) return dateVal;
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const year = d.getFullYear();
+                    return `${day}/${month}/${year}`;
                 },
                 formatDateLong(dateVal) {
-                    if (!dateVal) return '';
-                    return new Date(dateVal).toLocaleDateString(this.lang === 'ar' ? 'ar-EG' : 'en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                    if (!dateVal) return '-';
+                    const d = new Date(dateVal);
+                    if (isNaN(d.getTime())) return dateVal;
+                    const dayName = d.toLocaleDateString(this.lang === 'ar' ? 'ar-EG' : 'en-US', { weekday: 'long' });
+                    return `${dayName} ${this.formatDate(dateVal)}`;
                 },
                 formatNum(num) {
                     if (num === null || num === undefined) return '';
@@ -1739,11 +1953,12 @@
                     return Math.max(0, diffDays);
                 },
                 regenerateFormSchedule() {
-                    const expStr = this.computedExpirationDate;
+                    const expStr = this.computedExpirationDate || this.form.expirationDate;
+                    console.log('[QC Dynamic Trigger] regenerateFormSchedule executed. Production Date:', this.form.productionDate, 'Computed Expiration Date:', expStr);
                     if (this.form.productionDate && expStr) {
                         const prodDate = new Date(this.form.productionDate);
                         const expDate = new Date(expStr);
-                        if (expDate >= prodDate) {
+                        if (!isNaN(prodDate.getTime()) && !isNaN(expDate.getTime()) && expDate >= prodDate) {
                             const totalDays = this.calculateTotalShelfLife(this.form.productionDate, expStr);
                             this.formInspections = [
                                 { id: Date.now() + 1, stage: 'Baseline (0%)', scheduledDate: this.calculateMilestoneDate(this.form.productionDate, totalDays, 0) },
@@ -1752,12 +1967,68 @@
                                 { id: Date.now() + 4, stage: 'Three-Quarter-Life (75%)', scheduledDate: this.calculateMilestoneDate(this.form.productionDate, totalDays, 0.75) },
                                 { id: Date.now() + 5, stage: 'End-of-Life (100%)', scheduledDate: this.calculateMilestoneDate(this.form.productionDate, totalDays, 1) }
                             ];
+                            console.log('[QC Dynamic Trigger] Successfully generated 5 inspection intervals:', this.formInspections);
                             return;
                         }
                     }
                     this.formInspections = [];
-                    localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(this.samples));
-                    this.dropdowns.isCustomProductMode = false;
+                    console.log('[QC Dynamic Trigger] Inspection intervals reset (missing or invalid dates).');
+                },
+                recalculateSampleSchedule(sample) {
+                    if (!sample || !sample.productionDate || !sample.productName) return;
+                    console.log('[QC Dynamic Trigger] recalculateSampleSchedule called for sample:', sample.batchNumber);
+                    const search = sample.productName.trim().toLowerCase();
+                    const prod = this.productCatalog.find(i => i.name.trim().toLowerCase() === search || this.t(i.name).trim().toLowerCase() === search);
+                    
+                    let prodDate = new Date(sample.productionDate);
+                    if (isNaN(prodDate.getTime())) return;
+
+                    let expDate = new Date(prodDate);
+                    if (prod) {
+                        let applied = false;
+                        if (prod.expYear && !isNaN(parseInt(prod.expYear, 10)) && parseInt(prod.expYear, 10) > 0) {
+                            expDate.setFullYear(expDate.getFullYear() + parseInt(prod.expYear, 10));
+                            applied = true;
+                        }
+                        if (prod.expMonth && !isNaN(parseInt(prod.expMonth, 10)) && parseInt(prod.expMonth, 10) > 0) {
+                            expDate.setMonth(expDate.getMonth() + parseInt(prod.expMonth, 10));
+                            applied = true;
+                        } else if (prod.shelfLifeMonths && !isNaN(parseInt(prod.shelfLifeMonths, 10)) && parseInt(prod.shelfLifeMonths, 10) > 0) {
+                            expDate.setMonth(expDate.getMonth() + parseInt(prod.shelfLifeMonths, 10));
+                            applied = true;
+                        }
+                        if (prod.expDay && !isNaN(parseInt(prod.expDay, 10)) && parseInt(prod.expDay, 10) > 0) {
+                            expDate.setDate(expDate.getDate() + parseInt(prod.expDay, 10));
+                            applied = true;
+                        }
+                        if (!applied) {
+                            expDate.setMonth(expDate.getMonth() + 6);
+                        }
+                    } else {
+                        expDate.setMonth(expDate.getMonth() + 6);
+                    }
+                    sample.expirationDate = expDate.toISOString().split('T')[0];
+                    const totalDays = this.calculateTotalShelfLife(sample.productionDate, sample.expirationDate);
+
+                    if (!sample.inspections || sample.inspections.length === 0) {
+                        sample.inspections = [
+                            { id: Date.now() + 1, stage: 'Baseline (0%)', scheduledDate: this.calculateMilestoneDate(sample.productionDate, totalDays, 0), testedDate: '', inspectorName: '', result: '', issueCategory: '', defectTags: [], notes: '', rejectionReason: '', photoDataUrl: null },
+                            { id: Date.now() + 2, stage: 'Quarter-Life (25%)', scheduledDate: this.calculateMilestoneDate(sample.productionDate, totalDays, 0.25), testedDate: '', inspectorName: '', result: '', issueCategory: '', defectTags: [], notes: '', rejectionReason: '', photoDataUrl: null },
+                            { id: Date.now() + 3, stage: 'Mid-Life (50%)', scheduledDate: this.calculateMilestoneDate(sample.productionDate, totalDays, 0.50), testedDate: '', inspectorName: '', result: '', issueCategory: '', defectTags: [], notes: '', rejectionReason: '', photoDataUrl: null },
+                            { id: Date.now() + 4, stage: 'Three-Quarter-Life (75%)', scheduledDate: this.calculateMilestoneDate(sample.productionDate, totalDays, 0.75), testedDate: '', inspectorName: '', result: '', issueCategory: '', defectTags: [], notes: '', rejectionReason: '', photoDataUrl: null },
+                            { id: Date.now() + 5, stage: 'End-of-Life (100%)', scheduledDate: this.calculateMilestoneDate(sample.productionDate, totalDays, 1), testedDate: '', inspectorName: '', result: '', issueCategory: '', defectTags: [], notes: '', rejectionReason: '', photoDataUrl: null }
+                        ];
+                    } else {
+                        sample.inspections.forEach(insp => {
+                            if (!insp.testedDate && !insp.result) {
+                                if (insp.stage === 'Baseline (0%)') insp.scheduledDate = this.calculateMilestoneDate(sample.productionDate, totalDays, 0);
+                                else if (insp.stage === 'Quarter-Life (25%)') insp.scheduledDate = this.calculateMilestoneDate(sample.productionDate, totalDays, 0.25);
+                                else if (insp.stage === 'Mid-Life (50%)') insp.scheduledDate = this.calculateMilestoneDate(sample.productionDate, totalDays, 0.50);
+                                else if (insp.stage === 'Three-Quarter-Life (75%)') insp.scheduledDate = this.calculateMilestoneDate(sample.productionDate, totalDays, 0.75);
+                                else if (insp.stage === 'End-of-Life (100%)') insp.scheduledDate = this.calculateMilestoneDate(sample.productionDate, totalDays, 1);
+                            }
+                        });
+                    }
                     localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(this.samples));
                 },
                 addFormInspection() {
@@ -1767,9 +2038,44 @@
                         scheduledDate: ''
                     });
                 },
+                getSampleInspectionResult(sample) {
+                    if (!sample) return this.lang === 'ar' ? 'مقبول' : 'Approved';
+                    
+                    // Automatic evaluation of expiration
+                    const remainingDays = this.calculateRemainingShelfLife(sample.expirationDate, sample.productionDate);
+                    const isExpired = remainingDays <= 0 || sample.statusOverride === 'Archived / Expired' || (sample.inspections && sample.inspections.some(i => i.result === 'Shelf Life Expired' || i.result === 'انتهاء صلاحية'));
+                    
+                    if (isExpired) {
+                        return this.lang === 'ar' ? 'انتهاء صلاحية' : 'Expired';
+                    }
+                    if (sample.inspections && sample.inspections.some(i => i.result === 'Rejected' || i.result === 'مرفوض')) {
+                        return this.lang === 'ar' ? 'مرفوض' : 'Rejected';
+                    }
+                    if (sample.inspections && sample.inspections.some(i => i.result === 'Accepted with Notes' || i.result === 'مقبول بملاحظات')) {
+                        return this.lang === 'ar' ? 'مقبول بملاحظات' : 'Approved with Notes';
+                    }
+                    return this.lang === 'ar' ? 'مقبول' : 'Approved';
+                },
+                getSampleInspectionResultBadgeClass(sample) {
+                    if (!sample) return 'bg-green-100 text-green-800 border-green-300 font-bold';
+                    
+                    const remainingDays = this.calculateRemainingShelfLife(sample.expirationDate, sample.productionDate);
+                    const isExpired = remainingDays <= 0 || sample.statusOverride === 'Archived / Expired' || (sample.inspections && sample.inspections.some(i => i.result === 'Shelf Life Expired' || i.result === 'انتهاء صلاحية'));
+
+                    if (isExpired) {
+                        return 'bg-gray-700 text-white border-gray-800 font-bold'; // Dark Gray for Expired
+                    }
+                    if (sample.inspections && sample.inspections.some(i => i.result === 'Rejected' || i.result === 'مرفوض')) {
+                        return 'bg-red-600 text-white border-red-700 font-bold'; // Red for Rejected
+                    }
+                    if (sample.inspections && sample.inspections.some(i => i.result === 'Accepted with Notes' || i.result === 'مقبول بملاحظات')) {
+                        return 'bg-yellow-100 text-yellow-800 border-yellow-300 font-bold'; // Yellow/Orange for Approved with Notes
+                    }
+                    return 'bg-green-100 text-green-800 border-green-300 font-bold'; // Green for Approved
+                },
                 getStatus(sample) {
                     if (sample.statusOverride) return sample.statusOverride;
-                    if (sample.inspections.some(i => i.result === 'Rejected')) return 'Rejected';
+                    if (sample.inspections && sample.inspections.some(i => i.result === 'Rejected' || i.result === 'مرفوض')) return 'Rejected';
                     const remainingDays = this.calculateRemainingShelfLife(sample.expirationDate, sample.productionDate);
                     if (remainingDays > 30) return 'Active';
                     if (remainingDays >= 1 && remainingDays <= 30) return 'Near Expiry';
@@ -1779,18 +2085,18 @@
                     if (status === 'Archived / Expired') return 'bg-gray-800 text-white border-gray-900';
                     if (status === 'Active') return 'bg-green-100 text-green-800 border-green-200';
                     if (status === 'Near Expiry') return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-                    if (status === 'Expired') return 'bg-red-100 text-red-800 border-red-200';
+                    if (status === 'Expired') return 'bg-gray-700 text-white border-gray-800';
                     return 'bg-gray-100 text-gray-800 border-gray-200';
                 },
                 getResultBadgeClass(result) {
-                    if (result === 'Accepted') return 'text-green-600';
-                    if (result === 'Accepted with Notes') return 'text-blue-600';
-                    if (result === 'Rejected') return 'text-red-600';
-                    if (result === 'Shelf Life Expired') return 'text-gray-600';
+                    if (result === 'Accepted' || result === 'مقبول') return 'bg-green-100 text-green-800 border border-green-300 px-2.5 py-0.5 rounded font-bold text-xs shadow-sm';
+                    if (result === 'Accepted with Notes' || result === 'مقبول بملاحظات') return 'bg-yellow-100 text-yellow-800 border border-yellow-300 px-2.5 py-0.5 rounded font-bold text-xs shadow-sm';
+                    if (result === 'Rejected' || result === 'مرفوض') return 'bg-red-600 text-white border border-red-700 px-2.5 py-0.5 rounded font-bold text-xs shadow-sm';
+                    if (result === 'Shelf Life Expired' || result === 'انتهاء صلاحية') return 'bg-gray-700 text-white border border-gray-800 px-2.5 py-0.5 rounded font-bold text-xs shadow-sm';
                     return 'text-gray-500';
                 },
                 hasFoodSafetyIssue(sample) {
-                    return sample.inspections.some(insp => insp.issueCategory === 'Food Safety');
+                    return sample.inspections && sample.inspections.some(insp => insp.issueCategory === 'Food Safety');
                 },
                 calculateMilestoneDate(prodDateStr, totalDays, percentage) {
                     const d = new Date(prodDateStr);
@@ -1802,20 +2108,24 @@
                     return str.replace(/[أإآا]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').toLowerCase().trim();
                 },
                 handleProductInput() {
-                    // Handled automatically by native datalist and v-model
+                    this.form.expirationDate = this.computedExpirationDate;
+                    this.regenerateFormSchedule();
                 },
                 handleProductSelect() {
-                    const matchedProduct = this.productCatalog.find(p => this.t(p.name) === this.form.productName);
+                    const search = (this.form.productName || '').trim().toLowerCase();
+                    const matchedProduct = this.productCatalog.find(p => p.name.trim().toLowerCase() === search || this.t(p.name).trim().toLowerCase() === search);
+                    console.log('[QC Dynamic Trigger] handleProductSelect matched product:', matchedProduct);
                     if (matchedProduct) {
-                        this.form.customShelfLife = matchedProduct.shelfLifeMonths || 6;
+                        this.form.customShelfLife = matchedProduct.expMonth || matchedProduct.shelfLifeMonths || 6;
                     }
+                    this.form.expirationDate = this.computedExpirationDate;
+                    this.regenerateFormSchedule();
                 },
                 addSample() {
                     if (!this.form.productName) {
                         alert(this.lang === 'ar' ? 'يرجى اختيار صنف من القائمة' : 'Please select a product from the list');
                         return;
                     }
-                    // Validation simplified since expirationDate is computed
                     
                     const batchNum = this.form.batchNumber.trim() === '' ? this.generateBatchNumber() : this.form.batchNumber;
                     
@@ -1833,26 +2143,35 @@
                     if (!this.isProductInCatalog(trimmedName)) {
                         this.form.productName = trimmedName;
                         this.productCatalog.push({ name: trimmedName, shelfLifeMonths: this.form.customShelfLife || 6 });
+                        localStorage.setItem('QC_MASTER_CATALOG_DATA', JSON.stringify(this.productCatalog));
                     }
 
-                    this.samples.push({
+                    const newSample = {
                         id: Date.now(),
                         status: 'نشط',
                         sampleCount: this.form.sampleCount || 1, 
                         productName: this.form.productName, 
                         batchNumber: batchNum, 
                         productionDate: this.form.productionDate,
-                        expirationDate: this.computedExpirationDate, 
+                        expirationDate: this.computedExpirationDate || this.form.expirationDate, 
                         statusOverride: null,
                         notes: (this.form.notes || '').trim(), 
                         terminalTimestamp: null, 
                         expanded: true, 
                         inspections: smartInspections
-                    });
+                    };
+                    this.samples.push(newSample);
                     
+                    try {
+                        localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(this.samples));
+                        console.log('[QC Storage Success] Added new sample & saved inspection intervals to LocalStorage:', newSample);
+                    } catch (e) {
+                        console.error('[QC Storage Error] Failed to persist sample:', e);
+                    }
+
                     this.form = { productName: '', batchNumber: '', productionDate: '', expirationDate: '', customShelfLife: 6, notes: '' };
                     this.formInspections = [];
-                    this.dropdowns.isCustomProductMode = false;
+                    this.showToast(this.lang === 'ar' ? 'تمت إضافة العينة وحفظ فترات الفحص بنجاح' : 'Sample added and inspection intervals saved');
                 },
                 addInspection(sample) {
                     sample.inspections.push({
@@ -1886,7 +2205,31 @@
                 getNextInspectionDateFormatted(sample) {
                     const nextInsp = this.getNextPendingInspection(sample);
                     if (!nextInsp || !nextInsp.scheduledDate) return this.t('noNextInsp');
-                    return nextInsp.scheduledDate;
+                    return this.formatDate(nextInsp.scheduledDate);
+                },
+                getLastInspectionDate(sample) {
+                    if (!sample) return null;
+                    if (sample.lastInspectionDate) return sample.lastInspectionDate;
+                    if (sample.inspections && sample.inspections.length > 0) {
+                        const testedInspections = sample.inspections.filter(i => i.testedDate || i.result);
+                        if (testedInspections.length > 0) {
+                            const sorted = [...testedInspections].sort((a, b) => {
+                                const dateA = new Date(a.testedDate || a.scheduledDate || 0);
+                                const dateB = new Date(b.testedDate || b.scheduledDate || 0);
+                                return dateB - dateA;
+                            });
+                            return sorted[0].testedDate || sorted[0].scheduledDate || null;
+                        }
+                    }
+                    return null;
+                },
+                getLastInspectionDateFormatted(sample) {
+                    const lastDate = this.getLastInspectionDate(sample);
+                    if (!lastDate) return '-';
+                    return this.formatDate(lastDate);
+                },
+                saveSampleNotes(sample) {
+                    localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(this.samples));
                 },
                 deleteSample(sample) {
                     const confirmMessage = this.lang === 'ar' 
@@ -1950,6 +2293,8 @@
                     } else if (sample.statusOverride === 'Archived / Expired') {
                         sample.statusOverride = null; sample.terminalTimestamp = null;
                     }
+                    sample.lastInspectionDate = this.modalForm.testedDate || new Date().toISOString().split('T')[0];
+                    localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(this.samples));
                     this.closeModal();
                 },
                 resetFilters() {
@@ -2062,23 +2407,31 @@
 
                         const exportData = [];
                         
-                        this.filteredSamples.forEach(sample => {
-                            const masterStatus = this.t(this.getStatus(sample)) || '';
-                            const totalLife = this.calculateTotalShelfLife(sample.productionDate, sample.expirationDate) || 0;
-                            const remainingDays = this.calculateRemainingShelfLife(sample.expirationDate, sample.productionDate) || 0;
-                            const nextPending = this.getNextPendingInspection(sample);
-                            const nextInspDate = nextPending ? nextPending.scheduledDate : '';
+                        this.filteredSamples.forEach((sample, idx) => {
+                            const search = (sample.productName || '').trim().toLowerCase();
+                            const catalogItem = this.productCatalog.find(p => p.name.trim().toLowerCase() === search || this.t(p.name).trim().toLowerCase() === search);
+
+                            const serialNum = (catalogItem && catalogItem.serial != null) ? catalogItem.serial : (idx + 1);
+                            const expMonth = (catalogItem && catalogItem.expMonth != null) ? catalogItem.expMonth : '';
+                            const expDay = (catalogItem && catalogItem.expDay != null) ? catalogItem.expDay : '';
+                            const expYear = (catalogItem && catalogItem.expYear != null) ? catalogItem.expYear : '';
+                            const inspectionResult = this.getSampleInspectionResult(sample);
+                            const lastInspDate = this.getLastInspectionDateFormatted(sample);
+                            const nextInspDate = this.getNextInspectionDateFormatted(sample);
                             
                             exportData.push({
+                                "م": serialNum,
+                                "اسم الصنف": this.t(sample.productName) || sample.productName || '',
+                                "شهر": expMonth,
+                                "يوم": expDay,
+                                "سنه": expYear,
+                                "تاريخ الإنتاج": this.formatDate(sample.productionDate),
                                 "رقم التشغيلة": sample.batchNumber || '',
                                 "عدد العينات": sample.sampleCount || 1,
-                                "اسم الصنف": this.t(sample.productName) || '',
-                                "تاريخ الإنتاج": sample.productionDate || '',
-                                "تاريخ الانتهاء": sample.expirationDate || '',
-                                "الصلاحية الكلية": totalLife + (this.lang === 'ar' ? ' يوم' : ' Days'),
-                                "المتبقي من الصلاحية (أيام)": remainingDays,
-                                "حالة العينة": masterStatus,
-                                "الفحص القادم": nextInspDate
+                                "نتيجة الفحص": inspectionResult,
+                                "آخر فحص": lastInspDate === '-' ? '' : lastInspDate,
+                                "الفحص القادم": nextInspDate === this.t('noNextInsp') ? '' : nextInspDate,
+                                "ملاحظات": sample.notes || ''
                             });
                         });
 
@@ -2088,21 +2441,24 @@
                         worksheet['!views'].push({ rightToLeft: true });
 
                         worksheet['!cols'] = [
-                            { wch: 20 },
-                            { wch: 15 },
+                            { wch: 8 },
                             { wch: 25 },
+                            { wch: 10 },
+                            { wch: 10 },
+                            { wch: 10 },
+                            { wch: 18 },
+                            { wch: 20 },
+                            { wch: 12 },
+                            { wch: 20 },
                             { wch: 18 },
                             { wch: 18 },
-                            { wch: 20 },
-                            { wch: 25 },
-                            { wch: 20 },
-                            { wch: 20 }
+                            { wch: 25 }
                         ];
 
                         const workbook = window.XLSX.utils.book_new();
                         window.XLSX.utils.book_append_sheet(workbook, worksheet, "Active_Samples");
                         
-                        window.XLSX.writeFile(workbook, `Quality_Samples_${new Date().toISOString().split('T')[0]}.xlsx`);
+                        window.XLSX.writeFile(workbook, `QC_Retention_Samples_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
                         
                         this.showToast(this.lang === 'ar' ? 'تم تصدير الملف بنجاح' : 'File exported successfully!');
                     } catch(err) {

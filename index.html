@@ -686,7 +686,14 @@
                         </div>
                         <div>
                             <label class="block text-sm font-bold text-gray-700 mb-2">{{ t('shelfLifeMonths') }} *</label>
-                            <input type="number" v-model.number="catalogForm.shelfLifeMonths" required min="1" class="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-purple-500 focus:border-purple-500">
+                            <div class="flex space-x-2">
+                              <input type="number" v-model.number="catalogForm.shelfLifeMonths" required min="1" class="w-1/2 border border-gray-300 rounded-lg p-2.5 focus:ring-purple-500 focus:border-purple-5" />
+                              <select v-model="catalogForm.shelfLifeUnit" class="w-1/2 border border-gray-300 rounded-lg p-2.5 focus:ring-purple-500 focus:border-purple-5">
+                                <option value="Days">يوم</option>
+                                <option value="Months">شهر</option>
+                                <option value="Years">سنه</option>
+                              </select>
+                            </div>
                         </div>
                         <div>
                             <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg shadow transition-colors">
@@ -1197,7 +1204,8 @@
                     catalogSelectedItems: [],
                     catalogForm: {
                         name: '',
-                        shelfLifeMonths: 6
+                        shelfLifeMonths: 6,
+                        shelfLifeUnit: 'Months'
                     },
                     form: {
                         productName: '',
@@ -1842,9 +1850,22 @@
                         return;
                     }
                     
-                    this.productCatalog.push({ name: prodName, shelfLifeMonths: this.catalogForm.shelfLifeMonths });
+                    // Convert the entered value based on the selected unit to months
+                    let months = this.catalogForm.shelfLifeMonths;
+                    const unit = this.catalogForm.shelfLifeUnit;
+                    if (unit === 'Days') {
+                        months = Math.ceil(months / 30);
+                    } else if (unit === 'Years') {
+                        months = months * 12;
+                    }
+                    this.productCatalog.push({
+                        name: prodName,
+                        shelfLifeMonths: months,
+                        shelfLifeUnit: unit
+                    });
                     this.catalogForm.name = '';
                     this.catalogForm.shelfLifeMonths = 6;
+                    this.catalogForm.shelfLifeUnit = 'Months';
                     this.showToast(this.lang === 'ar' ? 'تم حفظ الصنف بنجاح' : 'Product saved successfully');
                     localStorage.setItem('QC_MASTER_CATALOG_DATA', JSON.stringify(this.productCatalog));
                 },

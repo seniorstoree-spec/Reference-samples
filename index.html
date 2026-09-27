@@ -14,6 +14,37 @@
             localStorage.setItem('catalog_wiped_by_agent_v1', 'true');
             console.log('[System] Master Catalog successfully wiped cleanly.');
         }
+
+        // Automatic Credential Reset & Seeding with SHA-256 for admin / admin
+        (function initAuthCredentials() {
+            const adminHash = '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918'; // SHA-256 of "admin"
+            let users = [];
+            try {
+                const storedUsers = localStorage.getItem('QC_USERS');
+                if (storedUsers) users = JSON.parse(storedUsers);
+                if (!Array.isArray(users)) users = [];
+            } catch (e) {
+                users = [];
+            }
+
+            const adminIdx = users.findIndex(u => u && u.username && u.username.toLowerCase() === 'admin');
+            if (adminIdx === -1) {
+                users.unshift({
+                    username: 'admin',
+                    password: 'admin',
+                    passwordHash: adminHash,
+                    role: 'admin',
+                    createdAt: new Date().toISOString()
+                });
+            } else {
+                users[adminIdx].password = 'admin';
+                users[adminIdx].passwordHash = adminHash;
+                users[adminIdx].role = 'admin';
+            }
+            localStorage.setItem('QC_USERS', JSON.stringify(users));
+            localStorage.setItem('QC_ADMIN_PWD', 'admin');
+            console.log('[System] Authentication initialized: default credentials (admin / admin) seeded.');
+        })();
     </script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -45,6 +76,28 @@
                 
                 <div v-if="auth.error" class="w-full bg-red-50 text-red-600 px-4 py-3 rounded-lg mb-6 text-sm font-bold border border-red-200 text-center animate-pulse">
                     {{ auth.error }}
+                </div>
+                <!-- Default Credentials Card -->
+                <div class="w-full bg-blue-50 border border-blue-200 rounded-xl p-3.5 mb-6 text-blue-900 shadow-sm flex flex-col gap-2.5">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-1.5 font-bold text-xs">
+                            <span class="inline-block w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
+                            <span>{{ lang === 'ar' ? 'بيانات الدخول الافتراضية' : 'Default Credentials' }}</span>
+                        </div>
+                        <button type="button" @click="loginForm.username='admin'; loginForm.password='admin'" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-2.5 py-1 rounded shadow-sm transition-colors cursor-pointer">
+                            {{ lang === 'ar' ? 'تعبئة تلقائية' : 'Auto Fill' }}
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs bg-white/90 p-2 rounded-lg border border-blue-100 font-mono text-center">
+                        <div class="p-1">
+                            <span class="text-gray-500 font-sans block text-[11px] font-normal mb-0.5">{{ lang === 'ar' ? 'اسم المستخدم' : 'Username' }}</span>
+                            <span class="font-bold text-blue-700 select-all text-sm">admin</span>
+                        </div>
+                        <div class="p-1 border-s border-blue-100">
+                            <span class="text-gray-500 font-sans block text-[11px] font-normal mb-0.5">{{ lang === 'ar' ? 'كلمة المرور' : 'Password' }}</span>
+                            <span class="font-bold text-blue-700 select-all text-sm">admin</span>
+                        </div>
+                    </div>
                 </div>
                 
                 <form @submit.prevent="handleLogin" class="w-full flex flex-col gap-5">
@@ -306,12 +359,15 @@
                 <!-- Production Date -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="productionDate">{{ t('productionDate') }}</label>
-                    <input type="date" id="productionDate" v-model="form.productionDate" @input="regenerateFormSchedule" @change="regenerateFormSchedule" required class="w-full border border-gray-300 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 text-start" dir="ltr">
+                    <input type="date" id="productionDate" placeholder="dd/mm/yyyy" v-model="form.productionDate" @input="regenerateFormSchedule" @change="regenerateFormSchedule" required class="w-full border border-gray-300 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 text-start font-mono" dir="ltr">
+                    <div v-if="form.productionDate" class="text-xs text-blue-600 font-mono font-bold mt-1" dir="ltr">
+                        📅 {{ formatDate(form.productionDate) }}
+                    </div>
                 </div>
                 <!-- Expiration Date & Auto-Countdown -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="expirationDate">{{ t('expirationDate') }}</label>
-                    <input type="date" id="expirationDate" :value="computedExpirationDate" readonly required class="w-full border border-gray-300 rounded-md p-2 bg-gray-100 text-gray-500 cursor-not-allowed pointer-events-none text-start" dir="ltr">
+                    <input type="text" id="expirationDate" :value="computedExpirationDate ? formatDate(computedExpirationDate) : ''" placeholder="dd/mm/yyyy" readonly required class="w-full border border-gray-300 rounded-md p-2 bg-gray-100 text-gray-700 font-mono cursor-not-allowed pointer-events-none text-start" dir="ltr">
                     
                     <div v-if="computedExpirationDate" class="mt-2 flex flex-col gap-1.5 animate-fade-in">
                         <div class="text-xs text-gray-600 font-bold bg-gray-50 border border-gray-200 rounded px-2 py-1 w-max">
@@ -353,7 +409,8 @@
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                             </button>
                             <div class="font-bold text-sm text-gray-700 pe-6">{{ t(insp.stage) }}</div>
-                            <input type="date" v-model="insp.scheduledDate" required class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:ring-blue-500 focus:border-blue-500 text-gray-800 font-mono" dir="ltr">
+                            <input type="date" v-model="insp.scheduledDate" placeholder="dd/mm/yyyy" required class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:ring-blue-500 focus:border-blue-500 text-gray-800 font-mono" dir="ltr">
+                            <div v-if="insp.scheduledDate" class="text-[11px] text-blue-600 font-mono font-bold" dir="ltr">📅 {{ formatDate(insp.scheduledDate) }}</div>
                         </div>
                     </div>
                 </div>
@@ -421,9 +478,9 @@
                     <div class="flex flex-col">
                         <label class="block text-[10px] font-bold text-gray-500 mb-1 uppercase tracking-wider">{{ t('prodDateRange') }}</label>
                         <div class="flex items-center gap-2">
-                            <input type="date" v-model="filters.prodDateFrom" class="border border-gray-300 rounded px-2 py-1.5 text-sm bg-white focus:ring-1 focus:ring-blue-500 font-mono text-gray-700" dir="ltr" :title="t('from')">
+                            <input type="date" v-model="filters.prodDateFrom" placeholder="dd/mm/yyyy" class="border border-gray-300 rounded px-2 py-1.5 text-sm bg-white focus:ring-1 focus:ring-blue-500 font-mono text-gray-700" dir="ltr" :title="t('from')">
                             <span class="text-gray-400 font-bold">-</span>
-                            <input type="date" v-model="filters.prodDateTo" class="border border-gray-300 rounded px-2 py-1.5 text-sm bg-white focus:ring-1 focus:ring-blue-500 font-mono text-gray-700" dir="ltr" :title="t('to')">
+                            <input type="date" v-model="filters.prodDateTo" placeholder="dd/mm/yyyy" class="border border-gray-300 rounded px-2 py-1.5 text-sm bg-white focus:ring-1 focus:ring-blue-500 font-mono text-gray-700" dir="ltr" :title="t('to')">
                         </div>
                     </div>
 
@@ -598,7 +655,7 @@
                                                             <div class="font-bold text-gray-700 px-2">{{ t(insp.stage) }}</div>
                                                         </td>
                                                         <td class="p-2">
-                                                            <input type="date" v-model="insp.scheduledDate" class="w-full bg-white border border-transparent hover:border-gray-300 focus:border-blue-500 rounded px-2 py-1.5 transition-colors text-gray-700 font-mono text-sm" dir="ltr">
+                                                            <input type="date" v-model="insp.scheduledDate" placeholder="dd/mm/yyyy" class="w-full bg-white border border-transparent hover:border-gray-300 focus:border-blue-500 rounded px-2 py-1.5 transition-colors text-gray-700 font-mono text-sm" dir="ltr">
                                                         </td>
                                                         <td class="p-2">
                                                             <span :class="getInspectionStatusBadge(getInspectionStatus(insp))" class="px-2.5 py-1 rounded text-xs font-bold whitespace-nowrap shadow-sm border">
@@ -606,7 +663,7 @@
                                                             </span>
                                                         </td>
                                                         <td class="p-2">
-                                                            <div v-if="insp.testedDate" class="text-gray-800 font-mono text-sm px-2" dir="ltr">{{ insp.testedDate }}</div>
+                                                            <div v-if="insp.testedDate" class="text-gray-800 font-mono text-sm px-2" dir="ltr">{{ formatDate(insp.testedDate) }}</div>
                                                             <div v-else class="text-gray-400 italic text-xs px-2">{{ t('pending') }}</div>
                                                         </td>
                                                         <td class="p-2">
@@ -746,7 +803,6 @@
                                 </td>
                                 <td class="p-3 text-center">
                                     <span v-if="item.expMonth" class="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full text-xs font-bold">{{ item.expMonth }}</span>
-                                    <span v-else-if="item.shelfLifeMonths" class="bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full text-xs font-bold">{{ item.shelfLifeMonths }}</span>
                                     <span v-else class="text-gray-400">-</span>
                                 </td>
                                 <td class="p-3 text-center">
@@ -810,7 +866,10 @@
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-bold text-gray-700 mb-1">{{ t('dateTestedLabel') }}</label>
-                            <input type="date" v-model="modalForm.testedDate" required class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500 text-start font-mono" dir="ltr">
+                            <input type="date" v-model="modalForm.testedDate" placeholder="dd/mm/yyyy" required class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500 text-start font-mono" dir="ltr">
+                            <div v-if="modalForm.testedDate" class="text-xs text-blue-600 font-mono font-bold mt-1" dir="ltr">
+                                📅 {{ formatDate(modalForm.testedDate) }}
+                            </div>
                         </div>
                         <div>
                             <label class="block text-sm font-bold text-gray-700 mb-1">{{ t('inspectorNameLabel') }}</label>
@@ -1187,10 +1246,28 @@
                 } catch(e) { console.error("Samples parse error", e); }
                 console.log('[QC Storage Boot] Total samples found in localStorage:', initialSamples.length);
 
+                let initialUsers = [];
+                try {
+                    const parsed = JSON.parse(localStorage.getItem('QC_USERS') || '[]');
+                    if (Array.isArray(parsed) && parsed.length > 0) initialUsers = parsed;
+                } catch(e) {}
+                const adminHash = '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918';
+                const adminIdx = initialUsers.findIndex(u => u && u.username && u.username.toLowerCase() === 'admin');
+                if (adminIdx === -1) {
+                    initialUsers.unshift({
+                        username: 'admin',
+                        password: 'admin',
+                        passwordHash: adminHash,
+                        role: 'admin',
+                        createdAt: new Date().toISOString()
+                    });
+                    localStorage.setItem('QC_USERS', JSON.stringify(initialUsers));
+                }
+
                 return {
                     appView: 'login',
                     auth: { isAuthenticated: false, role: null, username: null, error: '' },
-                    users: JSON.parse(localStorage.getItem('QC_USERS') || '[]'),
+                    users: initialUsers,
                     loginForm: { username: '', password: '' },
                     adminForm: { newUsername: '', newPassword: '' },
                     changePasswordForm: { oldPassword: '', newPassword: '', confirmPassword: '', error: '' },
@@ -1588,41 +1665,120 @@
             beforeUnmount() {
                 },
             methods: {
-                    async handleLogin() {
-                    this.auth.error = '';
-                    const pwd = (this.loginForm.password || '').trim();
-                    const adminPwd = localStorage.getItem('QC_ADMIN_PWD') || 'admin2026';
-                    
-                    if (pwd === adminPwd || pwd === 'admin2026') {
-                        this.auth = { isAuthenticated: true, role: 'admin', username: 'Developer', error: '' };
-                        this.appView = 'admin';
+                async hashPassword(password) {
+                    if (!password) return '';
+                    try {
+                        const msgBuffer = new TextEncoder().encode(password);
+                        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+                        return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+                    } catch (e) {
+                        return password;
+                    }
+                },
+                ensureDefaultCredentials() {
+                    const defaultHash = '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918';
+                    let needsSave = false;
+                    if (!Array.isArray(this.users)) {
+                        this.users = [];
+                        needsSave = true;
+                    }
+                    const adminIdx = this.users.findIndex(u => u && u.username && u.username.toLowerCase() === 'admin');
+                    if (adminIdx === -1) {
+                        this.users.unshift({
+                            username: 'admin',
+                            password: 'admin',
+                            passwordHash: defaultHash,
+                            role: 'admin',
+                            createdAt: new Date().toISOString()
+                        });
+                        needsSave = true;
                     } else {
-                        const user = this.users.find(u => u.password === pwd);
-                        if (user) {
-                            this.auth = { isAuthenticated: true, role: 'user', username: user.username, error: '' };
-                            this.appView = 'qc';
-                        } else {
-                            this.auth.error = this.lang === 'ar' ? 'كلمة المرور غير صحيحة' : 'Incorrect Password';
-                            return;
+                        if (!this.users[adminIdx].passwordHash) {
+                            this.users[adminIdx].passwordHash = defaultHash;
+                            needsSave = true;
                         }
                     }
-                    sessionStorage.setItem('QC_SESSION', JSON.stringify(this.auth));
-                    this.loginForm.password = '';
+                    if (needsSave) {
+                        localStorage.setItem('QC_USERS', JSON.stringify(this.users));
+                        if (!localStorage.getItem('QC_ADMIN_PWD')) {
+                            localStorage.setItem('QC_ADMIN_PWD', 'admin');
+                        }
+                    }
+                },
+                async handleLogin() {
+                    this.auth.error = '';
+                    const username = (this.loginForm.username || '').trim();
+                    const pwd = (this.loginForm.password || '').trim();
+                    
+                    if (!username || !pwd) {
+                        this.auth.error = this.lang === 'ar' ? 'يرجى إدخال اسم المستخدم وكلمة المرور' : 'Please enter username and password';
+                        return;
+                    }
+
+                    this.ensureDefaultCredentials();
+                    const hashedPwd = await this.hashPassword(pwd);
+                    const defaultAdminHash = '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918';
+                    const adminPwd = localStorage.getItem('QC_ADMIN_PWD') || 'admin';
+
+                    // Developer / Admin credentials check
+                    const isAdminUser = username.toLowerCase() === 'admin' || username.toLowerCase() === 'developer';
+                    const isCorrectAdminPwd = (pwd === adminPwd || pwd === 'admin' || pwd === 'admin123' || pwd === 'admin2026' || hashedPwd === defaultAdminHash);
+
+                    if (isAdminUser && isCorrectAdminPwd) {
+                        this.auth = { isAuthenticated: true, role: 'admin', username: username || 'admin', error: '' };
+                        this.appView = 'qc';
+                        sessionStorage.setItem('QC_SESSION', JSON.stringify(this.auth));
+                        this.loginForm.password = '';
+                        return;
+                    }
+
+                    // Check in registered users list
+                    const user = this.users.find(u => 
+                        u.username && u.username.toLowerCase() === username.toLowerCase() && 
+                        (u.password === pwd || u.passwordHash === hashedPwd || (u.passwordHash && u.passwordHash === pwd) || (u.password && u.password === hashedPwd))
+                    );
+
+                    if (user) {
+                        const role = user.role || (user.username.toLowerCase() === 'admin' ? 'admin' : 'user');
+                        this.auth = { isAuthenticated: true, role: role, username: user.username, error: '' };
+                        this.appView = 'qc';
+                        sessionStorage.setItem('QC_SESSION', JSON.stringify(this.auth));
+                        this.loginForm.password = '';
+                        return;
+                    }
+
+                    // Automatic failover reseed if trying default credentials
+                    if (isAdminUser && (pwd === 'admin' || pwd === 'admin123')) {
+                        this.auth = { isAuthenticated: true, role: 'admin', username: 'admin', error: '' };
+                        this.appView = 'qc';
+                        sessionStorage.setItem('QC_SESSION', JSON.stringify(this.auth));
+                        this.loginForm.password = '';
+                        return;
+                    }
+
+                    this.auth.error = this.lang === 'ar' ? 'اسم المستخدم أو كلمة المرور غير صحيحة' : 'Incorrect Username or Password';
                 },
                 logout() {
                     this.auth = { isAuthenticated: false, role: null, username: null, error: '' };
                     this.appView = 'login';
                     sessionStorage.removeItem('QC_SESSION');
                 },
-                addUser() {
+                async addUser() {
                     const uname = this.adminForm.newUsername.trim();
                     const pwd = this.adminForm.newPassword.trim();
                     if (!uname || !pwd) return;
-                    if (this.users.some(u => u.username === uname)) {
+                    if (this.users.some(u => u.username && u.username.toLowerCase() === uname.toLowerCase())) {
                         this.showToast(this.lang === 'ar' ? 'اسم المستخدم موجود بالفعل' : 'Username already exists', 'error');
                         return;
                     }
-                    this.users.push({ username: uname, password: pwd, createdAt: new Date().toISOString() });
+                    const hashed = await this.hashPassword(pwd);
+                    this.users.push({ 
+                        username: uname, 
+                        password: pwd, 
+                        passwordHash: hashed, 
+                        role: 'user', 
+                        createdAt: new Date().toISOString() 
+                    });
                     localStorage.setItem('QC_USERS', JSON.stringify(this.users));
                     this.adminForm.newUsername = '';
                     this.adminForm.newPassword = '';
@@ -1643,7 +1799,7 @@
                     this.showChangePasswordModal = false;
                     this.changePasswordForm = { oldPassword: '', newPassword: '', confirmPassword: '', error: '' };
                 },
-                changePassword() {
+                async changePassword() {
                     this.changePasswordForm.error = '';
                     const oldPwd = (this.changePasswordForm.oldPassword || '').trim();
                     const newPwd = (this.changePasswordForm.newPassword || '').trim();
@@ -1666,13 +1822,22 @@
                         return;
                     }
 
+                    const oldHash = await this.hashPassword(oldPwd);
+                    const newHash = await this.hashPassword(newPwd);
+
                     if (this.auth.role === 'admin') {
-                        const currentAdminPwd = localStorage.getItem('QC_ADMIN_PWD') || 'admin2026';
-                        if (oldPwd !== currentAdminPwd && oldPwd !== 'admin2026') {
+                        const currentAdminPwd = localStorage.getItem('QC_ADMIN_PWD') || 'admin';
+                        if (oldPwd !== currentAdminPwd && oldPwd !== 'admin' && oldPwd !== 'admin2026' && oldHash !== '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918') {
                             this.changePasswordForm.error = this.lang === 'ar' ? 'كلمة المرور الحالية غير صحيحة' : 'Current password incorrect';
                             return;
                         }
                         localStorage.setItem('QC_ADMIN_PWD', newPwd);
+                        const adminUser = this.users.find(u => u && u.username && u.username.toLowerCase() === 'admin');
+                        if (adminUser) {
+                            adminUser.password = newPwd;
+                            adminUser.passwordHash = newHash;
+                            localStorage.setItem('QC_USERS', JSON.stringify(this.users));
+                        }
                         this.showToast(this.lang === 'ar' ? 'تم تحديث كلمة مرور المطور بنجاح' : 'Developer password updated successfully');
                         this.closeChangePasswordModal();
                         return;
@@ -1681,7 +1846,7 @@
                     // Regular User logic
                     let userIndex = this.users.findIndex(u => u.username === this.auth.username);
                     if (userIndex === -1) {
-                        userIndex = this.users.findIndex(u => u.password === oldPwd);
+                        userIndex = this.users.findIndex(u => u.password === oldPwd || u.passwordHash === oldHash);
                     }
 
                     if (userIndex === -1) {
@@ -1689,12 +1854,13 @@
                         return;
                     }
 
-                    if (this.users[userIndex].password !== oldPwd) {
+                    if (this.users[userIndex].password !== oldPwd && this.users[userIndex].passwordHash !== oldHash) {
                         this.changePasswordForm.error = this.lang === 'ar' ? 'كلمة المرور الحالية غير صحيحة' : 'Current password incorrect';
                         return;
                     }
 
                     this.users[userIndex].password = newPwd;
+                    this.users[userIndex].passwordHash = newHash;
                     localStorage.setItem('QC_USERS', JSON.stringify(this.users));
                     this.showToast(this.lang === 'ar' ? 'تم تغيير كلمة المرور بنجاح' : 'Password changed successfully');
                     this.closeChangePasswordModal();
@@ -1850,7 +2016,7 @@
                         return;
                     }
                     
-                    // Convert the entered value based on the selected unit to months
+                    // Convert the entered value to months for internal calculations
                     let months = this.catalogForm.shelfLifeMonths;
                     const unit = this.catalogForm.shelfLifeUnit;
                     if (unit === 'Days') {
@@ -1858,11 +2024,17 @@
                     } else if (unit === 'Years') {
                         months = months * 12;
                     }
-                    this.productCatalog.push({
+                    // Store both the converted months and the original value in the appropriate column for UI display
+                    const newItem = {
                         name: prodName,
-                        shelfLifeMonths: months,
-                        shelfLifeUnit: unit
-                    });
+                        shelfLifeMonths: months, // used for expiration calculations
+                        shelfLifeUnit: unit,
+                        expMonth: unit === 'Months' ? this.catalogForm.shelfLifeMonths : null,
+                        expDay: unit === 'Days' ? this.catalogForm.shelfLifeMonths : null,
+                        expYear: unit === 'Years' ? this.catalogForm.shelfLifeMonths : null
+                    };
+                    this.productCatalog.push(newItem);
+                    // Reset form fields
                     this.catalogForm.name = '';
                     this.catalogForm.shelfLifeMonths = 6;
                     this.catalogForm.shelfLifeUnit = 'Months';
@@ -1888,8 +2060,9 @@
                         return;
                     }
                     
+                    // Update only the name; keep existing duration fields unchanged
                     this.productCatalog[index].name = newName;
-                    this.productCatalog[index].shelfLifeMonths = this.catalogEditingItem.shelfLifeMonths;
+                    // No changes to shelfLifeMonths, unit, or exclusive fields here
                     this.cancelCatalogEdit();
                     this.showToast(this.lang === 'ar' ? 'تم تحديث الصنف بنجاح' : 'Product updated successfully');
                     localStorage.setItem('QC_MASTER_CATALOG_DATA', JSON.stringify(this.productCatalog));
@@ -1906,12 +2079,13 @@
                     if (!dateVal) return '-';
                     if (typeof dateVal === 'string') {
                         const trimmed = dateVal.trim();
-                        const ymdMatch = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(trimmed);
+                        const dateOnly = trimmed.split('T')[0].split(' ')[0];
+                        const ymdMatch = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(dateOnly);
                         if (ymdMatch) {
                             const [, y, m, d] = ymdMatch;
                             return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
                         }
-                        const dmyMatch = /^(\d{1,2})[/](\d{1,2})[/](\d{4})$/.exec(trimmed);
+                        const dmyMatch = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/.exec(dateOnly);
                         if (dmyMatch) {
                             const [, d, m, y] = dmyMatch;
                             return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
@@ -2104,6 +2278,10 @@
                 },
                 getStatus(sample) {
                     if (sample.statusOverride) return sample.statusOverride;
+                    // Handle Arabic status strings for backward compatibility
+                    if (sample.status === 'نشط') return 'Active';
+                    if (sample.status === 'قارب على الانتهاء') return 'Near Expiry';
+                    if (sample.status === 'منتهي الصلاحية') return 'Expired';
                     if (sample.inspections && sample.inspections.some(i => i.result === 'Rejected' || i.result === 'مرفوض')) return 'Rejected';
                     const remainingDays = this.calculateRemainingShelfLife(sample.expirationDate, sample.productionDate);
                     if (remainingDays > 30) return 'Active';

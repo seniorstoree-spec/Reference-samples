@@ -371,7 +371,7 @@
                     
                     <div v-if="computedExpirationDate" class="mt-2 flex flex-col gap-1.5 animate-fade-in">
                         <div class="text-xs text-gray-600 font-bold bg-gray-50 border border-gray-200 rounded px-2 py-1 w-max">
-                            {{ t('colTotalLife') }}: {{ computedShelfLifeMonths }} {{ lang === 'ar' ? 'شهور' : 'Months' }} ({{ computedShelfLifeMonths * 30 }} {{ lang === 'ar' ? 'يوم' : 'Days' }})
+                            {{ t('colTotalLife') }}: {{ computedShelfLifeDisplay }}
                         </div>
                         <span :class="[
                             'px-2.5 py-1 rounded-full text-xs font-bold border flex w-max items-center gap-1.5 shadow-sm',
@@ -1287,15 +1287,19 @@
                     form: {
                         productName: '',
                         batchNumber: '',
+                        sampleCount: 1,
                         productionDate: '',
                         expirationDate: '',
-                        customShelfLife: 6
+                        customShelfLife: 6,
+                        notes: ''
                     },
                     formInspections: [],
                     samples: initialSamples,
                                         
                     currentTab: 'active', // active or archived
                     activeKpiFilter: null,
+                    archiveExplorer: { selectedYear: null, selectedMonth: null, selectedProduct: null },
+                    rejectedArchiveExplorer: { selectedYear: null, selectedMonth: null, selectedProduct: null },
                     
                     editingNoteId: null,
                     editingNoteText: '',

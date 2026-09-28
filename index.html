@@ -7,15 +7,8 @@
     <title>قسم العينات المرجعية</title>
     
     <script>
-        // One-time targeted wipe for QC_MASTER_CATALOG_DATA
-        if (!localStorage.getItem('catalog_wiped_by_agent_v1')) {
-            localStorage.setItem('QC_MASTER_CATALOG_DATA', '[]');
-            localStorage.removeItem('master_catalog_items'); // Legacy key fallback
-            localStorage.setItem('catalog_wiped_by_agent_v1', 'true');
-            console.log('[System] Master Catalog successfully wiped cleanly.');
-        }
-
-        // Automatic Credential Reset & Seeding with SHA-256 for admin / admin
+        // Initialize default administrator only when no administrator exists.
+        // Do not overwrite an existing password on every page load.
         (function initAuthCredentials() {
             const adminHash = '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918'; // SHA-256 of "admin"
             let users = [];
@@ -36,14 +29,15 @@
                     role: 'admin',
                     createdAt: new Date().toISOString()
                 });
+                localStorage.setItem('QC_USERS', JSON.stringify(users));
+                if (!localStorage.getItem('QC_ADMIN_PWD')) {
+                    localStorage.setItem('QC_ADMIN_PWD', 'admin');
+                }
+                console.log('[System] Default administrator created.');
             } else {
-                users[adminIdx].password = 'admin';
-                users[adminIdx].passwordHash = adminHash;
                 users[adminIdx].role = 'admin';
+                localStorage.setItem('QC_USERS', JSON.stringify(users));
             }
-            localStorage.setItem('QC_USERS', JSON.stringify(users));
-            localStorage.setItem('QC_ADMIN_PWD', 'admin');
-            console.log('[System] Authentication initialized: default credentials (admin / admin) seeded.');
         })();
     </script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
@@ -1220,7 +1214,7 @@
                 
                 if (window.MASTER_CATALOG_SEED) {
                     const hasStoredCatalog = localStorage.getItem('QC_MASTER_CATALOG_DATA') !== null;
-                    if (!hasStoredCatalog || localVersion !== window.APP_DATA_VERSION) {
+                    if (!hasStoredCatalog || initialCatalog.length === 0 || localVersion !== window.APP_DATA_VERSION) {
                         const existingNames = new Set(initialCatalog.map(p => p.name.trim().toLowerCase()));
                         let addedCount = 0;
                         window.MASTER_CATALOG_SEED.forEach(seedItem => {
@@ -1440,6 +1434,13 @@
                     if (prod.expYear && !isNaN(parseInt(prod.expYear, 10))) return parseInt(prod.expYear, 10) * 12;
                     return 6;
                 },
+                computedShelfLifeDisplay() {
+                    if (!this.form.productName || !this.computedExpirationDate) return '-';
+                    const months = this.computedShelfLifeMonths || 0;
+                    const days = this.calculateTotalShelfLife(this.form.productionDate, this.computedExpirationDate);
+                    if (this.lang === 'ar') return months ? (months + ' شهر (' + days + ' يوم)') : (days + ' يوم');
+                    return months ? (months + ' month(s) (' + days + ' days)') : (days + ' days');
+                },
                 computedExpirationDate() {
                     if (!this.form.productionDate || !this.form.productName) return '';
                     let prodDate = new Date(this.form.productionDate);
@@ -1603,6 +1604,29 @@
                 },
                 catalogSelectedCount() {
                     return this.catalogSelectedItems.length;
+                },
+                baseFilteredSamples() {
+                    return this.samples.filter(sample => {
+                        if (this.filters.searchQuery) {
+                            const query = this.filters.searchQuery.toLowerCase();
+                            const productNameAr = this.t(sample.productName).toLowerCase();
+                            const productNameEn = (sample.productName || '').toLowerCase();
+                            const batchNum = (sample.batchNumber || '').toLowerCase();
+                            if (!productNameAr.includes(query) && !productNameEn.includes(query) && !batchNum.includes(query)) return false;
+                        }
+                        if (this.filters.prodDateFrom && sample.productionDate < this.filters.prodDateFrom) return false;
+                        if (this.filters.prodDateTo && sample.productionDate > this.filters.prodDateTo) return false;
+                        if (this.filters.remainingDaysBracket) {
+                            const remDays = this.calculateRemainingShelfLife(sample.expirationDate, sample.productionDate);
+                            if (this.filters.remainingDaysBracket === 'expired' && remDays > 0) return false;
+                            if (this.filters.remainingDaysBracket === '7' && remDays > 7) return false;
+                            if (this.filters.remainingDaysBracket === '30' && remDays > 30) return false;
+                            if (this.filters.remainingDaysBracket === '30+' && remDays <= 30) return false;
+                        }
+                        if (this.filters.inspectionResult && !sample.inspections.some(i => i.result === this.filters.inspectionResult)) return false;
+                        if (this.filters.issueCategory && !sample.inspections.some(i => i.issueCategory === this.filters.issueCategory)) return false;
+                        return true;
+                    });
                 },
                 filteredSamples() {
                     return this.samples.filter(sample => {

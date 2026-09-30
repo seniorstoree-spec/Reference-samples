@@ -1205,23 +1205,7 @@
                 } catch(e) { console.error("Samples parse error", e); }
                 console.log('[QC Storage Boot] Total samples found in localStorage:', initialSamples.length);
 
-                let initialUsers = [];
-                try {
-                    const parsed = JSON.parse(localStorage.getItem('QC_USERS') || '[]');
-                    if (Array.isArray(parsed) && parsed.length > 0) initialUsers = parsed;
-                } catch(e) {}
-                const adminHash = '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918';
-                const adminIdx = initialUsers.findIndex(u => u && u.username && u.username.toLowerCase() === 'admin');
-                if (adminIdx === -1) {
-                    initialUsers.unshift({
-                        username: 'admin',
-                        password: 'admin',
-                        passwordHash: adminHash,
-                        role: 'admin',
-                        createdAt: new Date().toISOString()
-                    });
-                    localStorage.setItem('QC_USERS', JSON.stringify(initialUsers));
-                }
+                const initialUsers = [];
 
                 return {
                     appView: 'login',
@@ -1730,46 +1714,6 @@
                     }
                 },
 
-                async hashPassword(password) {
-                    if (!password) return '';
-                    try {
-                        const msgBuffer = new TextEncoder().encode(password);
-                        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-                        return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-                    } catch (e) {
-                        return password;
-                    }
-                },
-                ensureDefaultCredentials() {
-                    const defaultHash = '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918';
-                    let needsSave = false;
-                    if (!Array.isArray(this.users)) {
-                        this.users = [];
-                        needsSave = true;
-                    }
-                    const adminIdx = this.users.findIndex(u => u && u.username && u.username.toLowerCase() === 'admin');
-                    if (adminIdx === -1) {
-                        this.users.unshift({
-                            username: 'admin',
-                            password: 'admin',
-                            passwordHash: defaultHash,
-                            role: 'admin',
-                            createdAt: new Date().toISOString()
-                        });
-                        needsSave = true;
-                    } else {
-                        if (!this.users[adminIdx].passwordHash) {
-                            this.users[adminIdx].passwordHash = defaultHash;
-                            needsSave = true;
-                        }
-                    }
-                    if (needsSave) {
-                        localStorage.setItem('QC_USERS', JSON.stringify(this.users));
-                        if (!localStorage.getItem('QC_ADMIN_PWD')) {
-                            localStorage.setItem('QC_ADMIN_PWD', 'admin');
-                        }
-                    }
-                },
                 toggleSignupMode() {
                     this.isSignupMode = !this.isSignupMode;
                     this.auth.error = '';

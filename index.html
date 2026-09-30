@@ -6,40 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>قسم العينات المرجعية</title>
     
-    <script>
-        // Initialize default administrator only when no administrator exists.
-        // Do not overwrite an existing password on every page load.
-        (function initAuthCredentials() {
-            const adminHash = '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918'; // SHA-256 of "admin"
-            let users = [];
-            try {
-                const storedUsers = localStorage.getItem('QC_USERS');
-                if (storedUsers) users = JSON.parse(storedUsers);
-                if (!Array.isArray(users)) users = [];
-            } catch (e) {
-                users = [];
-            }
 
-            const adminIdx = users.findIndex(u => u && u.username && u.username.toLowerCase() === 'admin');
-            if (adminIdx === -1) {
-                users.unshift({
-                    username: 'admin',
-                    password: 'admin',
-                    passwordHash: adminHash,
-                    role: 'admin',
-                    createdAt: new Date().toISOString()
-                });
-                localStorage.setItem('QC_USERS', JSON.stringify(users));
-                if (!localStorage.getItem('QC_ADMIN_PWD')) {
-                    localStorage.setItem('QC_ADMIN_PWD', 'admin');
-                }
-                console.log('[System] Default administrator created.');
-            } else {
-                users[adminIdx].role = 'admin';
-                localStorage.setItem('QC_USERS', JSON.stringify(users));
-            }
-        })();
-    </script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
         // Supabase backend configuration - publishable key only.
@@ -80,40 +47,29 @@
                 <div v-if="auth.error" class="w-full bg-red-50 text-red-600 px-4 py-3 rounded-lg mb-6 text-sm font-bold border border-red-200 text-center animate-pulse">
                     {{ auth.error }}
                 </div>
-                <!-- Default Credentials Card -->
-                <div class="w-full bg-blue-50 border border-blue-200 rounded-xl p-3.5 mb-6 text-blue-900 shadow-sm flex flex-col gap-2.5">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-1.5 font-bold text-xs">
-                            <span class="inline-block w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-                            <span>{{ lang === 'ar' ? 'بيانات الدخول الافتراضية' : 'Default Credentials' }}</span>
-                        </div>
-                        <button type="button" @click="loginForm.username='admin'; loginForm.password='admin'" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-2.5 py-1 rounded shadow-sm transition-colors cursor-pointer">
-                            {{ lang === 'ar' ? 'تعبئة تلقائية' : 'Auto Fill' }}
-                        </button>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2 text-xs bg-white/90 p-2 rounded-lg border border-blue-100 font-mono text-center">
-                        <div class="p-1">
-                            <span class="text-gray-500 font-sans block text-[11px] font-normal mb-0.5">{{ lang === 'ar' ? 'اسم المستخدم' : 'Username' }}</span>
-                            <span class="font-bold text-blue-700 select-all text-sm">admin</span>
-                        </div>
-                        <div class="p-1 border-s border-blue-100">
-                            <span class="text-gray-500 font-sans block text-[11px] font-normal mb-0.5">{{ lang === 'ar' ? 'كلمة المرور' : 'Password' }}</span>
-                            <span class="font-bold text-blue-700 select-all text-sm">admin</span>
-                        </div>
+                <div class="w-full bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 text-blue-900 shadow-sm text-sm">
+                    <div class="font-bold mb-1">{{ isSignupMode ? (lang === 'ar' ? 'إنشاء حساب جديد' : 'Create account') : (lang === 'ar' ? 'تسجيل الدخول الآمن' : 'Secure sign in') }}</div>
+                    <div class="text-blue-800/80">
+                        {{ isSignupMode
+                            ? (lang === 'ar' ? 'أنشئ حسابك باستخدام البريد الإلكتروني وكلمة المرور. سيتم حفظ الحساب في Supabase Auth.' : 'Create an account with email and password. The account is stored in Supabase Auth.')
+                            : (lang === 'ar' ? 'الدخول الآن يتم من خلال Supabase Auth وليس LocalStorage.' : 'Authentication is handled by Supabase Auth, not LocalStorage.') }}
                     </div>
                 </div>
-                
+
                 <form @submit.prevent="handleLogin" class="w-full flex flex-col gap-5">
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">{{ lang === 'ar' ? 'اسم المستخدم' : 'Username' }}</label>
-                        <input type="text" v-model="loginForm.username" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow text-center text-xl tracking-widest" placeholder="username" required>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">{{ lang === 'ar' ? 'البريد الإلكتروني' : 'Email' }}</label>
+                        <input type="email" v-model="loginForm.email" autocomplete="email" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow text-center text-lg" placeholder="name@example.com" required>
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">{{ lang === 'ar' ? 'كلمة المرور' : 'Password' }}</label>
-                        <input type="password" v-model="loginForm.password" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow text-center text-xl tracking-widest" dir="ltr" placeholder="••••••••" required>
+                        <input type="password" v-model="loginForm.password" autocomplete="current-password" minlength="6" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow text-center text-xl tracking-widest" placeholder="••••••••" dir="ltr" required>
                     </div>
                     <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-lg shadow-md transition-colors text-lg mt-2">
-                        {{ lang === 'ar' ? 'دخول النظام' : 'Enter System' }}
+                        {{ isSignupMode ? (lang === 'ar' ? 'إنشاء الحساب' : 'Create Account') : (lang === 'ar' ? 'دخول النظام' : 'Sign In') }}
+                    </button>
+                    <button type="button" @click="toggleSignupMode" class="text-blue-700 hover:text-blue-900 font-bold text-sm">
+                        {{ isSignupMode ? (lang === 'ar' ? 'لدي حساب بالفعل — تسجيل الدخول' : 'I already have an account — Sign in') : (lang === 'ar' ? 'إنشاء حساب جديد' : 'Create a new account') }}
                     </button>
                 </form>
             </div>
@@ -1269,9 +1225,10 @@
 
                 return {
                     appView: 'login',
-                    auth: { isAuthenticated: false, role: null, username: null, error: '' },
+                    auth: { isAuthenticated: false, role: null, username: null, email: null, error: '' },
                     users: initialUsers,
-                    loginForm: { username: '', password: '' },
+                    loginForm: { email: '', password: '' },
+                    isSignupMode: false,
                     adminForm: { newUsername: '', newPassword: '' },
                     changePasswordForm: { oldPassword: '', newPassword: '', confirmPassword: '', error: '' },
                     showChangePasswordModal: false,
@@ -1331,15 +1288,22 @@
             
 
             async mounted() {
-                const sessionStr = sessionStorage.getItem('QC_SESSION');
-                if (sessionStr) {
-                    try {
-                        const session = JSON.parse(sessionStr);
-                        if (session.isAuthenticated) {
-                            this.auth = session;
-                            this.appView = session.role === 'admin' ? 'admin' : 'qc';
+                try {
+                    const { data: { session } } = await supabaseClient.auth.getSession();
+                    if (session?.user) {
+                        await this.applySupabaseUser(session.user);
+                        this.appView = 'qc';
+                    }
+                    supabaseClient.auth.onAuthStateChange(async (event, session) => {
+                        if (session?.user) {
+                            await this.applySupabaseUser(session.user);
+                        } else if (event === 'SIGNED_OUT') {
+                            this.auth = { isAuthenticated: false, role: null, username: null, email: null, error: '' };
+                            this.appView = 'login';
                         }
-                    } catch(e){}
+                    });
+                } catch (e) {
+                    console.error('[Auth] Session initialization failed:', e);
                 }
                 // Migration: Sync all loaded samples with master catalog rules
                 let migrated = false;
@@ -1708,35 +1672,43 @@
             methods: {
                 async initializeSupabaseSync() {
                     try {
-                        const { data: authData, error: authError } = await supabaseClient.auth.getSession();
-                        if (authError) throw authError;
-
-                        if (!authData.session) {
-                            const { error } = await supabaseClient.auth.signInAnonymously();
-                            if (error) throw error;
+                        const { data: { session } } = await supabaseClient.auth.getSession();
+                        if (!session?.user) {
+                            console.log('[Supabase Sync] No authenticated user; waiting for login.');
+                            return false;
                         }
 
                         const { data, error } = await supabaseClient
                             .from('reference_app_state')
-                            .select('catalog, samples, app_data_version')
+                            .select('catalog,samples,app_data_version')
                             .eq('id', 1)
                             .maybeSingle();
 
                         if (error) throw error;
 
-                        const remoteCatalog = Array.isArray(data?.catalog) ? data.catalog : [];
-                        const remoteSamples = Array.isArray(data?.samples) ? data.samples : [];
+                        if (data) {
+                            if (Array.isArray(data.catalog) && data.catalog.length > 0) {
+                                this.productCatalog = data.catalog;
+                                localStorage.setItem('QC_MASTER_CATALOG_DATA', JSON.stringify(data.catalog));
+                            }
+                            if (Array.isArray(data.samples)) {
+                                this.samples = data.samples;
+                                localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(data.samples));
+                            }
+                            if (data.app_data_version) {
+                                window.APP_DATA_VERSION = data.app_data_version;
+                            }
+                        }
 
-                        if (remoteCatalog.length > 0) this.productCatalog = remoteCatalog;
-                        if (remoteSamples.length > 0) this.samples = remoteSamples;
-
-                        if (remoteCatalog.length === 0 && this.productCatalog.length > 0) {
+                        if ((!data || !Array.isArray(data.catalog) || data.catalog.length === 0) && this.productCatalog.length > 0) {
                             await this.persistAppState();
                         }
 
-                        console.log('[Supabase] Backend sync ready. Catalog:', this.productCatalog.length, 'Samples:', this.samples.length);
+                        console.log('[Supabase Sync] Authenticated sync ready.', session.user.id);
+                        return true;
                     } catch (error) {
-                        console.warn('[Supabase] Backend sync unavailable; continuing with LocalStorage fallback.', error);
+                        console.warn('[Supabase Sync] Backend unavailable; LocalStorage fallback remains active.', error);
+                        return false;
                     }
                 },
                 async persistAppState() {
@@ -1798,63 +1770,86 @@
                         }
                     }
                 },
+                toggleSignupMode() {
+                    this.isSignupMode = !this.isSignupMode;
+                    this.auth.error = '';
+                    this.loginForm.password = '';
+                },
+                async applySupabaseUser(user) {
+                    const role = user?.app_metadata?.reference_role || user?.app_metadata?.role || 'user';
+                    const displayName = user?.user_metadata?.display_name || user?.email || 'User';
+                    this.auth = {
+                        isAuthenticated: true,
+                        role,
+                        username: displayName,
+                        email: user?.email || '',
+                        error: ''
+                    };
+                },
                 async handleLogin() {
                     this.auth.error = '';
-                    const username = (this.loginForm.username || '').trim();
-                    const pwd = (this.loginForm.password || '').trim();
-                    
-                    if (!username || !pwd) {
-                        this.auth.error = this.lang === 'ar' ? 'يرجى إدخال اسم المستخدم وكلمة المرور' : 'Please enter username and password';
+                    const email = (this.loginForm.email || '').trim().toLowerCase();
+                    const pwd = this.loginForm.password || '';
+
+                    if (!email || !pwd) {
+                        this.auth.error = this.lang === 'ar' ? 'يرجى إدخال البريد الإلكتروني وكلمة المرور' : 'Please enter email and password';
+                        return;
+                    }
+                    if (pwd.length < 6) {
+                        this.auth.error = this.lang === 'ar' ? 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' : 'Password must be at least 6 characters';
                         return;
                     }
 
-                    this.ensureDefaultCredentials();
-                    const hashedPwd = await this.hashPassword(pwd);
-                    const defaultAdminHash = '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918';
-                    const adminPwd = localStorage.getItem('QC_ADMIN_PWD') || 'admin';
-
-                    // Developer / Admin credentials check
-                    const isAdminUser = username.toLowerCase() === 'admin' || username.toLowerCase() === 'developer';
-                    const isCorrectAdminPwd = (pwd === adminPwd || pwd === 'admin' || pwd === 'admin123' || pwd === 'admin2026' || hashedPwd === defaultAdminHash);
-
-                    if (isAdminUser && isCorrectAdminPwd) {
-                        this.auth = { isAuthenticated: true, role: 'admin', username: username || 'admin', error: '' };
-                        this.appView = 'qc';
-                        sessionStorage.setItem('QC_SESSION', JSON.stringify(this.auth));
+                    if (this.isSignupMode) {
+                        const { data, error } = await supabaseClient.auth.signUp({
+                            email,
+                            password: pwd,
+                            options: {
+                                data: { display_name: email.split('@')[0] },
+                                emailRedirectTo: window.location.href
+                            }
+                        });
+                        if (error) {
+                            console.error('[Auth] Signup error:', error);
+                            this.auth.error = error.message || (this.lang === 'ar' ? 'تعذر إنشاء الحساب' : 'Could not create account');
+                            return;
+                        }
                         this.loginForm.password = '';
+                        if (data.session?.user) {
+                            await this.applySupabaseUser(data.session.user);
+                            this.isSignupMode = false;
+                            this.appView = 'qc';
+                            await this.initializeSupabaseSync();
+                        } else {
+                            this.auth.error = this.lang === 'ar'
+                                ? 'تم إنشاء الحساب. افتح رسالة تأكيد البريد الإلكتروني ثم ارجع وسجّل الدخول.'
+                                : 'Account created. Confirm your email, then return and sign in.';
+                            this.isSignupMode = false;
+                        }
                         return;
                     }
 
-                    // Check in registered users list
-                    const user = this.users.find(u => 
-                        u.username && u.username.toLowerCase() === username.toLowerCase() && 
-                        (u.password === pwd || u.passwordHash === hashedPwd || (u.passwordHash && u.passwordHash === pwd) || (u.password && u.password === hashedPwd))
-                    );
-
-                    if (user) {
-                        const role = user.role || (user.username.toLowerCase() === 'admin' ? 'admin' : 'user');
-                        this.auth = { isAuthenticated: true, role: role, username: user.username, error: '' };
-                        this.appView = 'qc';
-                        sessionStorage.setItem('QC_SESSION', JSON.stringify(this.auth));
-                        this.loginForm.password = '';
+                    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pwd });
+                    if (error || !data?.user) {
+                        console.error('[Auth] Sign-in error:', error);
+                        this.auth.error = this.lang === 'ar' ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' : 'Incorrect email or password';
                         return;
                     }
 
-                    // Automatic failover reseed if trying default credentials
-                    if (isAdminUser && (pwd === 'admin' || pwd === 'admin123')) {
-                        this.auth = { isAuthenticated: true, role: 'admin', username: 'admin', error: '' };
-                        this.appView = 'qc';
-                        sessionStorage.setItem('QC_SESSION', JSON.stringify(this.auth));
-                        this.loginForm.password = '';
-                        return;
-                    }
-
-                    this.auth.error = this.lang === 'ar' ? 'اسم المستخدم أو كلمة المرور غير صحيحة' : 'Incorrect Username or Password';
+                    await this.applySupabaseUser(data.user);
+                    this.loginForm.password = '';
+                    this.appView = 'qc';
+                    await this.initializeSupabaseSync();
                 },
-                logout() {
-                    this.auth = { isAuthenticated: false, role: null, username: null, error: '' };
+                async logout() {
+                    try {
+                        await supabaseClient.auth.signOut();
+                    } catch (e) {
+                        console.error('[Auth] Sign-out error:', e);
+                    }
+                    this.auth = { isAuthenticated: false, role: null, username: null, email: null, error: '' };
                     this.appView = 'login';
-                    sessionStorage.removeItem('QC_SESSION');
+                    this.loginForm.password = '';
                 },
                 async addUser() {
                     const uname = this.adminForm.newUsername.trim();
@@ -1894,20 +1889,11 @@
                 },
                 async changePassword() {
                     this.changePasswordForm.error = '';
-                    const oldPwd = (this.changePasswordForm.oldPassword || '').trim();
                     const newPwd = (this.changePasswordForm.newPassword || '').trim();
                     const confirmPwd = (this.changePasswordForm.confirmPassword || '').trim();
 
-                    if (!oldPwd) {
-                        this.changePasswordForm.error = this.lang === 'ar' ? 'يرجى إدخال كلمة المرور الحالية' : 'Please enter current password';
-                        return;
-                    }
-                    if (!newPwd) {
-                        this.changePasswordForm.error = this.lang === 'ar' ? 'يرجى إدخال كلمة المرور الجديدة' : 'Please enter new password';
-                        return;
-                    }
-                    if (newPwd.length < 3) {
-                        this.changePasswordForm.error = this.lang === 'ar' ? 'كلمة المرور قصيرة جداً (3 أحرف على الأقل)' : 'Password too short (at least 3 characters)';
+                    if (!newPwd || newPwd.length < 6) {
+                        this.changePasswordForm.error = this.lang === 'ar' ? 'كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل' : 'New password must be at least 6 characters';
                         return;
                     }
                     if (newPwd !== confirmPwd) {
@@ -1915,48 +1901,13 @@
                         return;
                     }
 
-                    const oldHash = await this.hashPassword(oldPwd);
-                    const newHash = await this.hashPassword(newPwd);
-
-                    if (this.auth.role === 'admin') {
-                        const currentAdminPwd = localStorage.getItem('QC_ADMIN_PWD') || 'admin';
-                        if (oldPwd !== currentAdminPwd && oldPwd !== 'admin' && oldPwd !== 'admin2026' && oldHash !== '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918') {
-                            this.changePasswordForm.error = this.lang === 'ar' ? 'كلمة المرور الحالية غير صحيحة' : 'Current password incorrect';
-                            return;
-                        }
-                        localStorage.setItem('QC_ADMIN_PWD', newPwd);
-                        const adminUser = this.users.find(u => u && u.username && u.username.toLowerCase() === 'admin');
-                        if (adminUser) {
-                            adminUser.password = newPwd;
-                            adminUser.passwordHash = newHash;
-                            localStorage.setItem('QC_USERS', JSON.stringify(this.users));
-                        }
-                        this.showToast(this.lang === 'ar' ? 'تم تحديث كلمة مرور المطور بنجاح' : 'Developer password updated successfully');
-                        this.closeChangePasswordModal();
+                    const { error } = await supabaseClient.auth.updateUser({ password: newPwd });
+                    if (error) {
+                        this.changePasswordForm.error = error.message || (this.lang === 'ar' ? 'تعذر تغيير كلمة المرور' : 'Could not change password');
                         return;
                     }
-
-                    // Regular User logic
-                    let userIndex = this.users.findIndex(u => u.username === this.auth.username);
-                    if (userIndex === -1) {
-                        userIndex = this.users.findIndex(u => u.password === oldPwd || u.passwordHash === oldHash);
-                    }
-
-                    if (userIndex === -1) {
-                        this.changePasswordForm.error = this.lang === 'ar' ? 'المستخدم غير موجود' : 'User not found';
-                        return;
-                    }
-
-                    if (this.users[userIndex].password !== oldPwd && this.users[userIndex].passwordHash !== oldHash) {
-                        this.changePasswordForm.error = this.lang === 'ar' ? 'كلمة المرور الحالية غير صحيحة' : 'Current password incorrect';
-                        return;
-                    }
-
-                    this.users[userIndex].password = newPwd;
-                    this.users[userIndex].passwordHash = newHash;
-                    localStorage.setItem('QC_USERS', JSON.stringify(this.users));
-                    this.showToast(this.lang === 'ar' ? 'تم تغيير كلمة المرور بنجاح' : 'Password changed successfully');
                     this.closeChangePasswordModal();
+                    this.showToast(this.lang === 'ar' ? 'تم تغيير كلمة المرور بنجاح' : 'Password changed successfully');
                 },
                 handleExcelUpload(event) {
                     console.log("Excel file selected");

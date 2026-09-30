@@ -1669,6 +1669,55 @@
             beforeUnmount() {
                 },
             methods: {
+                getSampleKey(sample) {
+                    return String(sample?.id ?? sample?.sampleId ?? sample?.operationalNumber ?? '').trim();
+                },
+                mergeSamplesSafely(serverSamples, localSamples) {
+                    const server = Array.isArray(serverSamples) ? serverSamples : [];
+                    const local = Array.isArray(localSamples) ? localSamples : [];
+                    if (!local.length) return server.slice();
+
+                    const byKey = new Map();
+                    server.forEach(s => {
+                        const key = this.getSampleKey(s);
+                        if (key) byKey.set(key, s);
+                    });
+                    local.forEach(s => {
+                        const key = this.getSampleKey(s);
+                        if (!key) return;
+                        // Never discard a locally existing sample just because the server has a shorter list.
+                        // For identical IDs, server is authoritative unless the local record is newer.
+                        const existing = byKey.get(key);
+                        if (!existing) {
+                            byKey.set(key, s);
+                            return;
+                        }
+                        const serverTime = new Date(existing.updatedAt || existing.lastInspectionDate || 0).getTime();
+                        const localTime = new Date(s.updatedAt || s.lastInspectionDate || 0).getTime();
+                        if (localTime > serverTime) byKey.set(key, s);
+                    });
+                    return Array.from(byKey.values());
+                },
+                async createStateSnapshot(reason = 'automatic') {
+                    try {
+                        const { data: current, error: readError } = await supabaseClient
+                            .from('reference_app_state')
+                            .select('catalog,samples,app_data_version')
+                            .eq('id', 1)
+                            .maybeSingle();
+                        if (readError) throw readError;
+                        if (!current) return;
+                        await supabaseClient.from('reference_app_state_history').insert({
+                            state_id: 1,
+                            catalog: Array.isArray(current.catalog) ? current.catalog : [],
+                            samples: Array.isArray(current.samples) ? current.samples : [],
+                            app_data_version: current.app_data_version || window.APP_DATA_VERSION || '1.1.0',
+                            snapshot_reason: reason
+                        });
+                    } catch (e) {
+                        console.warn('[Supabase Backup] Snapshot failed:', e);
+                    }
+                },
                 async initializeSupabaseSync() {
                     try {
                         const { data: { session } } = await supabaseClient.auth.getSession();
@@ -1685,47 +1734,92 @@
 
                         if (error) throw error;
 
+                        const localCatalog = Array.isArray(this.productCatalog) ? this.productCatalog : [];
+                        const localSamples = Array.isArray(this.samples) ? this.samples : [];
+
                         if (data) {
+                            // Never replace a larger local sample set with a smaller server set.
+                            // This protects data during refreshes and deployments.
+                            const mergedSamples = this.mergeSamplesSafely(data.samples, localSamples);
+                            const serverSamplesCount = Array.isArray(data.samples) ? data.samples.length : 0;
+
+                            if (mergedSamples.length > serverSamplesCount) {
+                                this.samples = mergedSamples;
+                                localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(mergedSamples));
+                                await this.createStateSnapshot('recovered-local-samples-before-sync');
+                                await this.persistAppState('recovered-local-samples');
+                            } else {
+                                this.samples = mergedSamples;
+                                localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(mergedSamples));
+                            }
+
                             if (Array.isArray(data.catalog) && data.catalog.length > 0) {
                                 this.productCatalog = data.catalog;
                                 localStorage.setItem('QC_MASTER_CATALOG_DATA', JSON.stringify(data.catalog));
+                            } else if (localCatalog.length > 0) {
+                                this.productCatalog = localCatalog;
                             }
-                            if (Array.isArray(data.samples)) {
-                                this.samples = data.samples;
-                                localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(data.samples));
-                            }
+
                             if (data.app_data_version) {
                                 window.APP_DATA_VERSION = data.app_data_version;
                             }
                         }
 
-                        if ((!data || !Array.isArray(data.catalog) || data.catalog.length === 0) && this.productCatalog.length > 0) {
-                            await this.persistAppState();
+                        if (!data || !Array.isArray(data.catalog) || data.catalog.length === 0) {
+                            await this.persistAppState('initial-seed');
                         }
 
-                        console.log('[Supabase Sync] Authenticated sync ready.', session.user.id);
+                        console.log('[Supabase Sync] Protected sync ready.', session.user.id);
                         return true;
                     } catch (error) {
                         console.warn('[Supabase Sync] Backend unavailable; LocalStorage fallback remains active.', error);
                         return false;
                     }
                 },
-                async persistAppState() {
+                async persistAppState(reason = 'automatic') {
                     try {
+                        const localSamples = Array.isArray(this.samples) ? this.samples : [];
+                        const { data: current, error: readError } = await supabaseClient
+                            .from('reference_app_state')
+                            .select('catalog,samples,app_data_version')
+                            .eq('id', 1)
+                            .maybeSingle();
+                        if (readError) throw readError;
+
+                        const serverSamples = Array.isArray(current?.samples) ? current.samples : [];
+                        const mergedSamples = this.mergeSamplesSafely(serverSamples, localSamples);
+
+                        // A normal save is never allowed to silently shrink the server's sample set.
+                        if (serverSamples.length > mergedSamples.length) {
+                            console.error('[Supabase] Refusing destructive sample overwrite.', {
+                                serverCount: serverSamples.length,
+                                localCount: localSamples.length
+                            });
+                            this.samples = serverSamples;
+                            localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(serverSamples));
+                            await this.createStateSnapshot('blocked-destructive-overwrite');
+                            return false;
+                        }
+
+                        await this.createStateSnapshot('before-save');
                         const { error } = await supabaseClient
                             .from('reference_app_state')
                             .upsert({
                                 id: 1,
                                 catalog: this.productCatalog || [],
-                                samples: this.samples || [],
+                                samples: mergedSamples,
                                 app_data_version: window.APP_DATA_VERSION || '1.1.0',
                                 updated_at: new Date().toISOString()
                             }, { onConflict: 'id' });
 
                         if (error) throw error;
-                        console.log('[Supabase] State saved.');
+                        this.samples = mergedSamples;
+                        localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(mergedSamples));
+                        console.log('[Supabase] Protected state saved.', reason);
+                        return true;
                     } catch (error) {
                         console.warn('[Supabase] State save failed; LocalStorage remains the local fallback.', error);
+                        return false;
                     }
                 },
 

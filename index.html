@@ -31,6 +31,10 @@
         html[dir="ltr"] {
             font-family: 'Inter', sans-serif;
         }
+        /* Sample names must always remain on one line across the application. */
+        .sample-name-one-line {
+            white-space: nowrap !important;
+        }
     </style>
     <script src="data/masterCatalog.js"></script>
 </head>
@@ -546,7 +550,7 @@
                             </tr>
 
                             <!-- Main Sample Row -->
-                            <tr @click="sample.expanded = !sample.expanded" class="border-b transition-colors cursor-pointer" :class="hasFoodSafetyIssue(sample) ? 'bg-red-50 hover:bg-red-100' : (sample.expanded ? 'bg-blue-50/30 hover:bg-blue-50/50' : 'hover:bg-gray-50')">
+                            <tr class="border-b transition-colors" :class="hasFoodSafetyIssue(sample) ? 'bg-red-50 hover:bg-red-100' : (sample.expanded ? 'bg-blue-50/30 hover:bg-blue-50/50' : 'hover:bg-gray-50')">
                                 <td class="p-3 text-center">
                                     <button @click.stop="sample.expanded = !sample.expanded" class="text-blue-600 hover:text-blue-800 focus:outline-none p-1 rounded hover:bg-blue-100" title="Toggle">
                                         <svg v-if="!sample.expanded" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -555,7 +559,7 @@
                                 </td>
                                 <td class="p-3 font-mono font-bold text-blue-900" dir="ltr">{{ sample.batchNumber }}</td>
                                 <td class="p-3 text-start"><span class="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs font-bold border border-gray-200">{{ sample.sampleCount || 1 }} {{ t('sampleUnit') }}</span></td>
-                                <td class="p-3 font-bold text-gray-800">{{ t(sample.productName) }}</td>
+                                <td class="p-3 font-bold text-gray-800"><span class="sample-name-one-line">{{ t(sample.productName) }}</span></td>
                                 <td class="p-3 font-mono text-sm" dir="ltr">{{ formatDate(sample.productionDate) }}</td>
                                 <td class="p-3 font-mono text-sm" dir="ltr">{{ formatDate(sample.expirationDate) }}</td>
                                 <td class="p-3"><span class="font-bold">{{ calculateTotalShelfLife(sample.productionDate, sample.expirationDate) }}</span> {{ t('days') }}</td>
@@ -831,7 +835,7 @@
                 <h3 class="font-black text-lg mb-3">{{ lang === 'ar' ? 'العينات المحذوفة' : 'Deleted Samples' }}</h3>
                 <div v-if="deletedSamples.length===0" class="p-6 text-center text-gray-400 border rounded-lg mb-8">{{ lang === 'ar' ? 'لا توجد عينات محذوفة.' : 'No deleted samples.' }}</div>
                 <div v-else class="overflow-x-auto border rounded-lg mb-8"><table class="w-full text-sm"><thead class="bg-gray-50"><tr><th class="p-3 text-start">المنتج</th><th class="p-3 text-center">التشغيلة</th><th class="p-3 text-center">تاريخ الحذف</th><th class="p-3 text-center">الإجراءات</th></tr></thead><tbody class="divide-y">
-                    <tr v-for="item in deletedSamples" :key="'ds-'+getSampleKey(item)"><td class="p-3 font-bold">{{ t(item.productName) }}</td><td class="p-3 text-center font-mono">{{ item.batchNumber || '-' }}</td><td class="p-3 text-center">{{ formatDate(item.deletedAt) }}</td><td class="p-3 text-center"><button @click="restoreDeletedSample(item)" class="bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 rounded font-bold text-xs">استعادة</button> <button @click="permanentlyDeleteSample(item)" class="bg-red-50 text-red-700 border border-red-200 px-3 py-1.5 rounded font-bold text-xs">حذف نهائي</button></td></tr>
+                    <tr v-for="item in deletedSamples" :key="'ds-'+getSampleKey(item)"><td class="p-3 font-bold"><span class="sample-name-one-line">{{ t(item.productName) }}</span></td><td class="p-3 text-center font-mono">{{ item.batchNumber || '-' }}</td><td class="p-3 text-center">{{ formatDate(item.deletedAt) }}</td><td class="p-3 text-center"><button @click="restoreDeletedSample(item)" class="bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 rounded font-bold text-xs">استعادة</button> <button @click="permanentlyDeleteSample(item)" class="bg-red-50 text-red-700 border border-red-200 px-3 py-1.5 rounded font-bold text-xs">حذف نهائي</button></td></tr>
                 </tbody></table></div>
             </div>
         </section>
@@ -856,7 +860,7 @@
                         <div class="flex justify-between items-center">
                             <div>
                                 <span class="font-bold text-blue-900">{{ t('colProduct') }}:</span> 
-                                <span class="text-blue-800 font-bold ms-1">{{ t(activeInspectionModal.sample.productName) }}</span>
+                                <span class="text-blue-800 font-bold ms-1 sample-name-one-line">{{ t(activeInspectionModal.sample.productName) }}</span>
                             </div>
                             <div>
                                 <span class="font-bold text-blue-900">{{ t('colBatch') }}:</span> 
@@ -1253,6 +1257,10 @@
                     }
                 } catch(e) { console.error("Samples parse error", e); }
                 console.log('[QC Storage Boot] Total samples found in localStorage:', initialSamples.length);
+
+                // UI-only state must never be restored as expanded after refresh/sync.
+                // Details are opened only by the dedicated arrow button.
+                initialSamples = initialSamples.map(sample => ({ ...sample, expanded: false }));
 
                 const initialUsers = [];
 
@@ -1782,6 +1790,10 @@
                                 localSamples.filter(x=>!deletedSampleKeys.has(this.getSampleKey(x)))
                             );
                             const serverSamplesCount = Array.isArray(data.samples) ? data.samples.length : 0;
+
+                            // Keep inspection details collapsed after login/refresh.
+                            // The user can expand them only with the dedicated arrow.
+                            mergedSamples.forEach(sample => { sample.expanded = false; });
 
                             if (mergedSamples.length > serverSamplesCount) {
                                 this.samples = mergedSamples;

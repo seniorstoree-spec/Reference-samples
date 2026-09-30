@@ -2310,12 +2310,15 @@
                     return 'bg-green-100 text-green-800 border-green-300 font-bold'; // Green for Approved
                 },
                 getStatus(sample) {
+                    // Rejection has priority over the original sample status (e.g. "نشط").
+                    // This also repairs older samples whose status was saved as active before rejection.
+                    if (sample.inspections && sample.inspections.some(i => i.result === 'Rejected' || i.result === 'مرفوض')) return 'Rejected';
+                    if (sample.statusOverride === 'Rejected' || sample.statusOverride === 'مرفوض') return 'Rejected';
                     if (sample.statusOverride) return sample.statusOverride;
                     // Handle Arabic status strings for backward compatibility
                     if (sample.status === 'نشط') return 'Active';
                     if (sample.status === 'قارب على الانتهاء') return 'Near Expiry';
                     if (sample.status === 'منتهي الصلاحية') return 'Expired';
-                    if (sample.inspections && sample.inspections.some(i => i.result === 'Rejected' || i.result === 'مرفوض')) return 'Rejected';
                     const remainingDays = this.calculateRemainingShelfLife(sample.expirationDate, sample.productionDate);
                     if (remainingDays > 30) return 'Active';
                     if (remainingDays >= 1 && remainingDays <= 30) return 'Near Expiry';
@@ -2528,8 +2531,16 @@
                     } else {
                         insp.photoDataUrl = null; insp.issueCategory = ''; insp.defectTags = [];
                     }
-                    if (this.modalForm.result === 'Shelf Life Expired') {
+                    if (this.modalForm.result === 'Rejected') {
+                        // A rejected sample must leave Active Samples and appear in Rejected Samples.
+                        sample.statusOverride = 'Rejected';
+                        sample.rejectedAt = this.modalForm.testedDate || new Date().toISOString().split('T')[0];
+                    } else if (this.modalForm.result === 'Shelf Life Expired') {
                         sample.statusOverride = 'Archived / Expired'; sample.terminalTimestamp = new Date().toISOString();
+                    } else if (sample.statusOverride === 'Rejected') {
+                        // If a previously rejected inspection is changed to another result, restore normal status calculation.
+                        sample.statusOverride = null;
+                        sample.rejectedAt = null;
                     } else if (sample.statusOverride === 'Archived / Expired') {
                         sample.statusOverride = null; sample.terminalTimestamp = null;
                     }

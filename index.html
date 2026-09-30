@@ -839,8 +839,8 @@
                         </div>
                     </div>
 
-                    <!-- Tested Date & Inspector -->
-                    <div class="grid grid-cols-2 gap-4">
+                    <!-- Tested Date -->
+                    <div class="grid grid-cols-1 gap-4">
                         <div>
                             <label class="block text-sm font-bold text-gray-700 mb-1">{{ t('dateTestedLabel') }}</label>
                             <input type="date" v-model="modalForm.testedDate" placeholder="dd/mm/yyyy" required class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500 text-start font-mono" dir="ltr">
@@ -1474,7 +1474,7 @@
                     return [];
                 },
                 isModalValid() {
-                    if (!this.modalForm.testedDate || !this.modalForm.inspectorName || !this.modalForm.result) return false;
+                    if (!this.modalForm.testedDate || !this.modalForm.result) return false;
                     
                     const requiresNotes = this.modalForm.result === 'Accepted with Notes';
                     const requiresReject = this.modalForm.result === 'Rejected';
@@ -2520,7 +2520,7 @@
                     if (!this.isModalValid) return;
                     const insp = this.activeInspectionModal.inspection;
                     const sample = this.activeInspectionModal.sample;
-                    insp.testedDate = this.modalForm.testedDate; insp.inspectorName = this.modalForm.inspectorName; insp.result = this.modalForm.result;
+                    insp.testedDate = this.modalForm.testedDate; insp.result = this.modalForm.result;
                     insp.notes = this.modalForm.result === 'Accepted with Notes' ? this.modalForm.notes : '';
                     insp.rejectionReason = this.modalForm.result === 'Rejected' ? this.modalForm.rejectionReason : '';
                     if (['Accepted with Notes', 'Rejected'].includes(this.modalForm.result)) {

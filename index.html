@@ -1555,7 +1555,7 @@
                 activeSamplesCount() {
                     return this.samples.filter(s => ['Active', 'Near Expiry'].includes(this.getStatus(s))).length;
                 },
-                deletedTotalCount() { return this.deletedSamples.length + this.deletedCatalog.length; },
+                deletedTotalCount() { return this.deletedSamples.length; },
                 archivedSamplesCount() {
                     return this.samples.filter(s => ['Expired', 'Archived / Expired'].includes(this.getStatus(s))).length;
                 },

@@ -4,7 +4,7 @@ A robust, intelligent Single Page Application (SPA) built for Quality Assurance 
 
 ## 🚀 Features
 
-- **Master Catalog Validation**: Over 500 preloaded verified products directly accessible from `data/masterCatalog.js`.
+- **Master Catalog Validation**: 526 preloaded verified products directly accessible from `data/masterCatalog.js`.
 - **Intelligent Dashboards**: Real-time KPI summaries, active samples tracking, and near-expiry detection.
 - **Smart Scheduling**: 5-step dynamic milestone system calculating next inspections based on product shelf life.
 - **Localization**: Full RTL Arabic layout and language support, persisting natively across refreshes.

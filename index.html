@@ -51,19 +51,37 @@
                     <div class="font-bold mb-1">{{ isSignupMode ? (lang === 'ar' ? 'إنشاء حساب جديد' : 'Create account') : (lang === 'ar' ? 'تسجيل الدخول الآمن' : 'Secure sign in') }}</div>
                     <div class="text-blue-800/80">
                         {{ isSignupMode
-                            ? (lang === 'ar' ? 'أنشئ حسابك باستخدام البريد الإلكتروني وكلمة المرور. سيتم حفظ الحساب في Supabase Auth.' : 'Create an account with email and password. The account is stored in Supabase Auth.')
+                            ? (authMode === 'username'
+                                ? (lang === 'ar' ? 'أنشئ حسابًا عاديًا باسم مستخدم وكلمة مرور، بدون إدخال بريد إلكتروني.' : 'Create a regular account with a username and password, without entering an email.')
+                                : (lang === 'ar' ? 'أنشئ حسابك باستخدام البريد الإلكتروني وكلمة المرور.' : 'Create your account with email and password.'))
                             : (lang === 'ar' ? 'الدخول الآن يتم من خلال Supabase Auth وليس LocalStorage.' : 'Authentication is handled by Supabase Auth, not LocalStorage.') }}
                     </div>
                 </div>
 
+                <div class="w-full bg-gray-100 p-1 rounded-xl flex gap-1 mb-1">
+                    <button type="button" @click="setAuthMode('email')" :class="authMode === 'email' ? 'bg-white shadow text-blue-700' : 'text-gray-500'" class="flex-1 py-2.5 rounded-lg font-bold text-sm transition">
+                        {{ lang === 'ar' ? 'بالبريد الإلكتروني' : 'Email account' }}
+                    </button>
+                    <button type="button" @click="setAuthMode('username')" :class="authMode === 'username' ? 'bg-white shadow text-blue-700' : 'text-gray-500'" class="flex-1 py-2.5 rounded-lg font-bold text-sm transition">
+                        {{ lang === 'ar' ? 'حساب عادي بدون إيميل' : 'Username account' }}
+                    </button>
+                </div>
+
                 <form @submit.prevent="handleLogin" class="w-full flex flex-col gap-5">
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">{{ lang === 'ar' ? 'البريد الإلكتروني' : 'Email' }}</label>
-                        <input type="email" v-model="loginForm.email" autocomplete="email" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow text-center text-lg" placeholder="name@example.com" required>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">
+                            {{ authMode === 'username' ? (lang === 'ar' ? 'اسم المستخدم' : 'Username') : (lang === 'ar' ? 'البريد الإلكتروني' : 'Email') }}
+                        </label>
+                        <input v-if="authMode === 'username'" type="text" v-model="loginForm.username" autocomplete="username" minlength="3" maxlength="30" pattern="[A-Za-z0-9._-]+" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow text-center text-lg" placeholder="مثال: ahmed01" dir="ltr" required>
+                        <input v-else type="email" v-model="loginForm.email" autocomplete="email" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow text-center text-lg" placeholder="name@example.com" dir="ltr" required>
+                        <p v-if="authMode === 'username'" class="text-xs text-gray-500 mt-1">{{ lang === 'ar' ? 'استخدم حروف إنجليزية وأرقام فقط، ويمكن استخدام . _ -' : 'Use English letters, numbers, dot, underscore or hyphen.' }}</p>
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">{{ lang === 'ar' ? 'كلمة المرور' : 'Password' }}</label>
                         <input type="password" v-model="loginForm.password" autocomplete="current-password" minlength="6" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow text-center text-xl tracking-widest" placeholder="••••••••" dir="ltr" required>
+                    </div>
+                    <div v-if="isSignupMode && authMode === 'username'" class="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 text-xs">
+                        {{ lang === 'ar' ? 'هذا الحساب لا يحتاج إلى بريد إلكتروني. احفظ اسم المستخدم وكلمة المرور لأن استعادة كلمة المرور عبر البريد غير متاحة لهذا النوع.' : 'This account does not use an email. Keep the username and password safe; email password recovery is not available for this account type.' }}
                     </div>
                     <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-lg shadow-md transition-colors text-lg mt-2">
                         {{ isSignupMode ? (lang === 'ar' ? 'إنشاء الحساب' : 'Create Account') : (lang === 'ar' ? 'دخول النظام' : 'Sign In') }}
@@ -1211,7 +1229,8 @@
                     appView: 'login',
                     auth: { isAuthenticated: false, role: null, username: null, email: null, error: '' },
                     users: initialUsers,
-                    loginForm: { email: '', password: '' },
+                    loginForm: { email: '', username: '', password: '' },
+                    authMode: 'email',
                     isSignupMode: false,
                     adminForm: { newUsername: '', newPassword: '' },
                     changePasswordForm: { oldPassword: '', newPassword: '', confirmPassword: '', error: '' },
@@ -1714,34 +1733,60 @@
                     }
                 },
 
+                setAuthMode(mode) {
+                    this.authMode = mode === 'username' ? 'username' : 'email';
+                    this.auth.error = '';
+                    this.loginForm.password = '';
+                },
                 toggleSignupMode() {
                     this.isSignupMode = !this.isSignupMode;
                     this.auth.error = '';
                     this.loginForm.password = '';
                 },
+                buildLocalAuthEmail(username) {
+                    const normalized = (username || '').trim().toLowerCase();
+                    const encoded = Array.from(normalized).map(ch => ch.codePointAt(0).toString(16)).join('');
+                    return `${encoded}@reference-samples.local`;
+                },
                 async applySupabaseUser(user) {
                     const role = user?.app_metadata?.reference_role || user?.app_metadata?.role || 'user';
-                    const displayName = user?.user_metadata?.display_name || user?.email || 'User';
+                    const displayName = user?.user_metadata?.display_name || user?.user_metadata?.username || user?.email || 'User';
+                    const isUsernameAccount = user?.user_metadata?.account_type === 'username';
                     this.auth = {
                         isAuthenticated: true,
                         role,
                         username: displayName,
-                        email: user?.email || '',
+                        email: isUsernameAccount ? '' : (user?.email || ''),
                         error: ''
                     };
                 },
                 async handleLogin() {
                     this.auth.error = '';
-                    const email = (this.loginForm.email || '').trim().toLowerCase();
                     const pwd = this.loginForm.password || '';
 
-                    if (!email || !pwd) {
-                        this.auth.error = this.lang === 'ar' ? 'يرجى إدخال البريد الإلكتروني وكلمة المرور' : 'Please enter email and password';
-                        return;
-                    }
                     if (pwd.length < 6) {
                         this.auth.error = this.lang === 'ar' ? 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' : 'Password must be at least 6 characters';
                         return;
+                    }
+
+                    let email = '';
+                    let displayName = '';
+
+                    if (this.authMode === 'username') {
+                        const username = (this.loginForm.username || '').trim().toLowerCase();
+                        if (!/^[a-z0-9._-]{3,30}$/.test(username)) {
+                            this.auth.error = this.lang === 'ar' ? 'اسم المستخدم يجب أن يكون 3-30 حرفًا ويحتوي على حروف إنجليزية أو أرقام أو . _ - فقط' : 'Username must be 3-30 characters and use only letters, numbers, dot, underscore or hyphen';
+                            return;
+                        }
+                        email = this.buildLocalAuthEmail(username);
+                        displayName = username;
+                    } else {
+                        email = (this.loginForm.email || '').trim().toLowerCase();
+                        if (!email) {
+                            this.auth.error = this.lang === 'ar' ? 'يرجى إدخال البريد الإلكتروني' : 'Please enter your email';
+                            return;
+                        }
+                        displayName = email.split('@')[0];
                     }
 
                     if (this.isSignupMode) {
@@ -1749,8 +1794,11 @@
                             email,
                             password: pwd,
                             options: {
-                                data: { display_name: email.split('@')[0] },
-                                emailRedirectTo: window.location.href
+                                data: {
+                                    display_name: displayName,
+                                    ...(this.authMode === 'username' ? { username: displayName, account_type: 'username' } : { account_type: 'email' })
+                                },
+                                ...(this.authMode === 'email' ? { emailRedirectTo: window.location.href } : {})
                             }
                         });
                         if (error) {
@@ -1765,10 +1813,10 @@
                             this.appView = 'qc';
                             await this.initializeSupabaseSync();
                         } else {
-                            this.auth.error = this.lang === 'ar'
-                                ? 'تم إنشاء الحساب. افتح رسالة تأكيد البريد الإلكتروني ثم ارجع وسجّل الدخول.'
-                                : 'Account created. Confirm your email, then return and sign in.';
                             this.isSignupMode = false;
+                            this.auth.error = this.authMode === 'username'
+                                ? (this.lang === 'ar' ? 'تم إنشاء الحساب بنجاح. يمكنك الآن تسجيل الدخول باسم المستخدم.' : 'Account created successfully. You can now sign in with your username.')
+                                : (this.lang === 'ar' ? 'تم إنشاء الحساب. افتح رسالة تأكيد البريد الإلكتروني ثم ارجع وسجّل الدخول.' : 'Account created. Confirm your email, then return and sign in.');
                         }
                         return;
                     }
@@ -1776,7 +1824,7 @@
                     const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pwd });
                     if (error || !data?.user) {
                         console.error('[Auth] Sign-in error:', error);
-                        this.auth.error = this.lang === 'ar' ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' : 'Incorrect email or password';
+                        this.auth.error = this.lang === 'ar' ? 'اسم المستخدم/البريد الإلكتروني أو كلمة المرور غير صحيحة' : 'Username/email or password is incorrect';
                         return;
                     }
 
@@ -1794,6 +1842,7 @@
                     this.auth = { isAuthenticated: false, role: null, username: null, email: null, error: '' };
                     this.appView = 'login';
                     this.loginForm.password = '';
+                    this.loginForm.username = '';
                 },
                 async addUser() {
                     const uname = this.adminForm.newUsername.trim();

@@ -40,6 +40,15 @@
             }
         })();
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        // Supabase backend configuration - publishable key only.
+        const SUPABASE_URL = 'https://eituitykmrmuxktnixwv.supabase.co';
+        const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_Npn3KbLZ78yMJw73aNAKcQ_iY4JPBC3';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+            auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+        });
+    </script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
@@ -1321,7 +1330,7 @@
             },
             
 
-            mounted() {
+            async mounted() {
                 const sessionStr = sessionStorage.getItem('QC_SESSION');
                 if (sessionStr) {
                     try {
@@ -1365,13 +1374,17 @@
                 if (migrated) {
                     console.log('[Migration] Automatically updated stored sample dates and generated missing milestones.');
                     try {
-                        localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(this.samples));
+                        this.persistAppState();
                     } catch(e){}
                 }
 
                     
                     
                 this.updateHtmlDir();
+                this.$nextTick(() => {
+                    this.updateCharts();
+                });
+                await this.initializeSupabaseSync();
                 this.$nextTick(() => {
                     this.updateCharts();
                 });
@@ -1693,6 +1706,58 @@
             beforeUnmount() {
                 },
             methods: {
+                async initializeSupabaseSync() {
+                    try {
+                        const { data: authData, error: authError } = await supabaseClient.auth.getSession();
+                        if (authError) throw authError;
+
+                        if (!authData.session) {
+                            const { error } = await supabaseClient.auth.signInAnonymously();
+                            if (error) throw error;
+                        }
+
+                        const { data, error } = await supabaseClient
+                            .from('reference_app_state')
+                            .select('catalog, samples, app_data_version')
+                            .eq('id', 1)
+                            .maybeSingle();
+
+                        if (error) throw error;
+
+                        const remoteCatalog = Array.isArray(data?.catalog) ? data.catalog : [];
+                        const remoteSamples = Array.isArray(data?.samples) ? data.samples : [];
+
+                        if (remoteCatalog.length > 0) this.productCatalog = remoteCatalog;
+                        if (remoteSamples.length > 0) this.samples = remoteSamples;
+
+                        if (remoteCatalog.length === 0 && this.productCatalog.length > 0) {
+                            await this.persistAppState();
+                        }
+
+                        console.log('[Supabase] Backend sync ready. Catalog:', this.productCatalog.length, 'Samples:', this.samples.length);
+                    } catch (error) {
+                        console.warn('[Supabase] Backend sync unavailable; continuing with LocalStorage fallback.', error);
+                    }
+                },
+                async persistAppState() {
+                    try {
+                        const { error } = await supabaseClient
+                            .from('reference_app_state')
+                            .upsert({
+                                id: 1,
+                                catalog: this.productCatalog || [],
+                                samples: this.samples || [],
+                                app_data_version: window.APP_DATA_VERSION || '1.1.0',
+                                updated_at: new Date().toISOString()
+                            }, { onConflict: 'id' });
+
+                        if (error) throw error;
+                        console.log('[Supabase] State saved.');
+                    } catch (error) {
+                        console.warn('[Supabase] State save failed; LocalStorage remains the local fallback.', error);
+                    }
+                },
+
                 async hashPassword(password) {
                     if (!password) return '';
                     try {
@@ -1970,7 +2035,7 @@
                                 imported++;
                             }
                             if (imported > 0) {
-                                localStorage.setItem('QC_MASTER_CATALOG_DATA', JSON.stringify(this.productCatalog));
+                                this.persistAppState();
                                 this.showToast(this.lang === 'ar' ? `استوردت ${imported} صنفاً بنجاح` : `Imported ${imported} products`);
                             } else {
                                 this.showToast(this.lang === 'ar' ? 'لم يتم استيراد أي صنف جديد' : 'No new products imported', 'error');
@@ -2009,7 +2074,7 @@
                     
                     if (window.confirm(confirmMessage)) {
                         this.productCatalog = this.productCatalog.filter(p => !this.catalogSelectedItems.includes(p.name));
-                        localStorage.setItem('QC_MASTER_CATALOG_DATA', JSON.stringify(this.productCatalog));
+                        this.persistAppState();
                         this.catalogSelectedItems = [];
                         this.showToast(this.lang === 'ar' ? 'تم حذف المنتجات بنجاح' : 'Products deleted successfully');
                     }
@@ -2028,7 +2093,7 @@
                                     addedCount++;
                                 }
                             });
-                            localStorage.setItem('QC_MASTER_CATALOG_DATA', JSON.stringify(this.productCatalog));
+                            this.persistAppState();
                             this.showToast(this.lang === 'ar' ? `تمت الاستعادة بنجاح: إضافة ${addedCount} منتج.` : `Successfully restored: added ${addedCount} products.`);
                         } else {
                             this.showToast(this.lang === 'ar' ? 'ملف البيانات الأساسية غير موجود' : 'Seed data file not found', 'error');
@@ -2067,7 +2132,7 @@
                     this.catalogForm.shelfLifeMonths = 6;
                     this.catalogForm.shelfLifeUnit = 'Months';
                     this.showToast(this.lang === 'ar' ? 'تم حفظ الصنف بنجاح' : 'Product saved successfully');
-                    localStorage.setItem('QC_MASTER_CATALOG_DATA', JSON.stringify(this.productCatalog));
+                    this.persistAppState();
                 },
                 startCatalogEdit(index, item) {
                     this.catalogEditingIndex = index;
@@ -2093,12 +2158,12 @@
                     // No changes to shelfLifeMonths, unit, or exclusive fields here
                     this.cancelCatalogEdit();
                     this.showToast(this.lang === 'ar' ? 'تم تحديث الصنف بنجاح' : 'Product updated successfully');
-                    localStorage.setItem('QC_MASTER_CATALOG_DATA', JSON.stringify(this.productCatalog));
+                    this.persistAppState();
                 },
                 deleteCatalogProduct(index) {
                     if(confirm(this.lang === 'ar' ? 'هل أنت متأكد من حذف هذا الصنف؟' : 'Are you sure you want to delete this product?')) {
                         this.productCatalog.splice(index, 1);
-                        localStorage.setItem('QC_MASTER_CATALOG_DATA', JSON.stringify(this.productCatalog));
+                        this.persistAppState();
                         this.showToast(this.lang === 'ar' ? 'تم حذف الصنف' : 'Product deleted');
                     }
                 },
@@ -2260,7 +2325,7 @@
                             }
                         });
                     }
-                    localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(this.samples));
+                    this.persistAppState();
                 },
                 addFormInspection() {
                     this.formInspections.push({
@@ -2378,7 +2443,7 @@
                     if (!this.isProductInCatalog(trimmedName)) {
                         this.form.productName = trimmedName;
                         this.productCatalog.push({ name: trimmedName, shelfLifeMonths: this.form.customShelfLife || 6 });
-                        localStorage.setItem('QC_MASTER_CATALOG_DATA', JSON.stringify(this.productCatalog));
+                        this.persistAppState();
                     }
 
                     const newSample = {
@@ -2398,7 +2463,7 @@
                     this.samples.push(newSample);
                     
                     try {
-                        localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(this.samples));
+                        this.persistAppState();
                         console.log('[QC Storage Success] Added new sample & saved inspection intervals to LocalStorage:', newSample);
                     } catch (e) {
                         console.error('[QC Storage Error] Failed to persist sample:', e);
@@ -2464,7 +2529,7 @@
                     return this.formatDate(lastDate);
                 },
                 saveSampleNotes(sample) {
-                    localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(this.samples));
+                    this.persistAppState();
                 },
                 deleteSample(sample) {
                     const confirmMessage = this.lang === 'ar' 
@@ -2475,7 +2540,7 @@
                         const index = this.samples.findIndex(s => s.id === sample.id);
                         if (index !== -1) {
                             this.samples.splice(index, 1);
-                            localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(this.samples));
+                            this.persistAppState();
                             this.showToast(this.lang === 'ar' ? 'تم حذف العينة بنجاح' : 'Sample deleted successfully');
                         }
                     }
@@ -2529,7 +2594,7 @@
                         sample.statusOverride = null; sample.terminalTimestamp = null;
                     }
                     sample.lastInspectionDate = this.modalForm.testedDate || new Date().toISOString().split('T')[0];
-                    localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(this.samples));
+                    this.persistAppState();
                     this.closeModal();
                 },
                 resetFilters() {

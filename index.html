@@ -461,7 +461,7 @@
                 <!-- Production Date -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1" for="productionDate">{{ t('productionDate') }}</label>
-                    <input type="date" id="productionDate" placeholder="dd/mm/yyyy" v-model="form.productionDate" @input="regenerateFormSchedule" @change="regenerateFormSchedule" required class="w-full border border-gray-300 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 text-start font-mono" dir="ltr" lang="en-GB">
+                    <input type="text" id="productionDate" :value="formatDateInput(form.productionDate)" @blur="updateDateInput(form, 'productionDate', $event.target.value, 'regenerate')" placeholder="DD/MM/YY" inputmode="numeric" autocomplete="off" maxlength="8" pattern="\\d{2}/\\d{2}/\\d{2}" required class="w-full border border-gray-300 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 text-start font-mono" dir="ltr">
                     <div v-if="form.productionDate" class="text-xs text-blue-600 font-mono font-bold mt-1" dir="ltr">
                         📅 {{ formatDate(form.productionDate) }}
                     </div>
@@ -511,7 +511,7 @@
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                             </button>
                             <div class="font-bold text-sm text-gray-700 pe-6">{{ t(insp.stage) }}</div>
-                            <input type="date" v-model="insp.scheduledDate" placeholder="dd/mm/yyyy" required class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:ring-blue-500 focus:border-blue-500 text-gray-800 font-mono" dir="ltr" lang="en-GB">
+                            <input type="text" :value="formatDateInput(insp.scheduledDate)" @blur="updateDateInput(insp, 'scheduledDate', $event.target.value, 'save-schedule', sample)" placeholder="DD/MM/YY" inputmode="numeric" autocomplete="off" maxlength="8" pattern="\\d{2}/\\d{2}/\\d{2}" required class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:ring-blue-500 focus:border-blue-500 text-gray-800 font-mono" dir="ltr">
                             <div v-if="insp.scheduledDate" class="text-[11px] text-blue-600 font-mono font-bold" dir="ltr">📅 {{ formatDate(insp.scheduledDate) }}</div>
                         </div>
                     </div>
@@ -562,9 +562,9 @@
                     <div class="flex flex-col">
                         <label class="block text-[10px] font-bold text-gray-500 mb-1 uppercase tracking-wider">{{ t('prodDateRange') }}</label>
                         <div class="flex items-center gap-2">
-                            <input type="date" v-model="filters.prodDateFrom" placeholder="dd/mm/yyyy" class="border border-gray-300 rounded px-2 py-1.5 text-sm bg-white focus:ring-1 focus:ring-blue-500 font-mono text-gray-700" dir="ltr" :title="t('from')" lang="en-GB">
+                            <input type="text" :value="formatDateInput(filters.prodDateFrom)" @blur="updateDateInput(filters, 'prodDateFrom', $event.target.value)" placeholder="DD/MM/YY" inputmode="numeric" autocomplete="off" maxlength="8" pattern="\\d{2}/\\d{2}/\\d{2}" class="border border-gray-300 rounded px-2 py-1.5 text-sm bg-white focus:ring-1 focus:ring-blue-500 font-mono text-gray-700" dir="ltr" :title="t('from')">
                             <span class="text-gray-400 font-bold">-</span>
-                            <input type="date" v-model="filters.prodDateTo" placeholder="dd/mm/yyyy" class="border border-gray-300 rounded px-2 py-1.5 text-sm bg-white focus:ring-1 focus:ring-blue-500 font-mono text-gray-700" dir="ltr" :title="t('to')" lang="en-GB">
+                            <input type="text" :value="formatDateInput(filters.prodDateTo)" @blur="updateDateInput(filters, 'prodDateTo', $event.target.value)" placeholder="DD/MM/YY" inputmode="numeric" autocomplete="off" maxlength="8" pattern="\\d{2}/\\d{2}/\\d{2}" class="border border-gray-300 rounded px-2 py-1.5 text-sm bg-white focus:ring-1 focus:ring-blue-500 font-mono text-gray-700" dir="ltr" :title="t('to')">
                         </div>
                     </div>
 
@@ -737,7 +737,7 @@
                                                             <div class="font-bold text-gray-800 px-2 leading-6 break-words">{{ t(insp.stage) }}</div>
                                                         </td>
                                                         <td class="p-3 align-middle">
-                                                            <input type="date" v-model="insp.scheduledDate" @change="saveInspectionSchedule(sample, insp)" placeholder="dd/mm/yyyy" class="w-full max-w-full bg-gray-50 border border-gray-200 hover:border-blue-300 focus:border-blue-500 rounded-lg px-2 py-2 transition-colors text-gray-700 font-mono text-sm shadow-sm" dir="ltr" lang="en-GB">
+                                                            <input type="text" :value="formatDateInput(insp.scheduledDate)" @blur="updateDateInput(insp, 'scheduledDate', $event.target.value, 'save-schedule', sample)" placeholder="DD/MM/YY" inputmode="numeric" autocomplete="off" maxlength="8" pattern="\\d{2}/\\d{2}/\\d{2}" class="w-full max-w-full bg-gray-50 border border-gray-200 hover:border-blue-300 focus:border-blue-500 rounded-lg px-2 py-2 transition-colors text-gray-700 font-mono text-sm shadow-sm" dir="ltr">
                                                         </td>
                                                         <td class="p-3 text-center align-middle">
                                                             <span :class="getInspectionStatusBadge(getInspectionStatus(insp))" class="inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-extrabold whitespace-nowrap shadow-sm border">
@@ -994,7 +994,7 @@
                     <div class="grid grid-cols-1 gap-4">
                         <div>
                             <label class="block text-sm font-bold text-gray-700 mb-1">{{ t('dateTestedLabel') }}</label>
-                            <input type="date" v-model="modalForm.testedDate" placeholder="dd/mm/yyyy" required class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500 text-start font-mono" dir="ltr" lang="en-GB">
+                            <input type="text" :value="formatDateInput(modalForm.testedDate)" @blur="updateDateInput(modalForm, 'testedDate', $event.target.value)" placeholder="DD/MM/YY" inputmode="numeric" autocomplete="off" maxlength="8" pattern="\\d{2}/\\d{2}/\\d{2}" required class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500 text-start font-mono" dir="ltr">
                             <div v-if="modalForm.testedDate" class="text-xs text-blue-600 font-mono font-bold mt-1" dir="ltr">
                                 📅 {{ formatDate(modalForm.testedDate) }}
                             </div>
@@ -2952,6 +2952,48 @@
                     this.deletedCatalog=this.deletedCatalog.filter(x=>this.getCatalogKey(x)!==key);
                     await this.persistAppState('permanent-delete-catalog');
                     this.showToast(this.lang==='ar'?'تم الحذف النهائي':'Permanently deleted');
+                },
+                formatDateInput(dateVal) {
+                    if (!dateVal) return '';
+                    const normalized = String(dateVal).trim().split('T')[0].split(' ')[0];
+                    let y, m, d;
+                    const ymd = /^(\\d{4})[-/.](\\d{1,2})[-/.](\\d{1,2})$/.exec(normalized);
+                    if (ymd) {
+                        y = Number(ymd[1]); m = Number(ymd[2]); d = Number(ymd[3]);
+                    } else {
+                        const dmy = /^(\\d{1,2})[-/.](\\d{1,2})[-/.](\\d{4})$/.exec(normalized);
+                        if (dmy) {
+                            d = Number(dmy[1]); m = Number(dmy[2]); y = Number(dmy[3]);
+                        } else {
+                            return '';
+                        }
+                    }
+                    return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${String(y).slice(-2)}`;
+                },
+                updateDateInput(target, field, rawValue, action = '', sample = null) {
+                    if (!target || !field) return false;
+                    const value = String(rawValue || '').trim();
+                    const match = /^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{2}|\\d{4})$/.exec(value);
+                    if (!match) {
+                        if (value) this.showToast(this.lang === 'ar' ? 'أدخل التاريخ بهذا الشكل: DD/MM/YY' : 'Enter the date as DD/MM/YY', 'error');
+                        return false;
+                    }
+                    const day = Number(match[1]);
+                    const month = Number(match[2]);
+                    let year = Number(match[3]);
+                    if (year < 100) year += 2000;
+                    const candidate = new Date(year, month - 1, day);
+                    if (candidate.getFullYear() !== year || candidate.getMonth() !== month - 1 || candidate.getDate() !== day) {
+                        this.showToast(this.lang === 'ar' ? 'التاريخ غير صحيح' : 'Invalid date', 'error');
+                        return false;
+                    }
+                    target[field] = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    if (action === 'regenerate') {
+                        this.regenerateFormSchedule();
+                    } else if (action === 'save-schedule' && sample) {
+                        this.saveInspectionSchedule(sample, target);
+                    }
+                    return true;
                 },
                 formatDate(dateVal) {
                     if (!dateVal) return '-';

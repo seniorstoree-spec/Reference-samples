@@ -2204,13 +2204,26 @@
                         return false;
                     }
                 },
-                async persistAppState(reason = 'automatic') {
+                async persistAppState(reason = 'automatic', options = {}) {
                     try {
                         const { data: current, error: readError } = await supabaseClient.from('reference_app_state')
                             .select('catalog,samples,deleted_samples,deleted_catalog,permanently_deleted_samples,app_data_version').eq('id',1).maybeSingle();
                         if (readError) throw readError;
 
-                        this.deletedSamples = this.mergeDeletedItems(current?.deleted_samples, this.deletedSamples);
+                        const restoredSampleKey = reason === 'restore-sample'
+                            ? String(options.restoredSampleKey || '')
+                            : '';
+
+                        if (restoredSampleKey) {
+                            // Restoration is an intentional removal from Deleted Items.
+                            // Do not merge the still-stale server copy back into the deleted list.
+                            this.deletedSamples = this.mergeDeletedItems(
+                                current?.deleted_samples,
+                                this.deletedSamples
+                            ).filter(item => this.getSampleKey(item) !== restoredSampleKey);
+                        } else {
+                            this.deletedSamples = this.mergeDeletedItems(current?.deleted_samples, this.deletedSamples);
+                        }
                         this.deletedCatalog = this.mergeDeletedItems(current?.deleted_catalog, this.deletedCatalog);
                         const permanentServer = Array.isArray(current?.permanently_deleted_samples) ? current.permanently_deleted_samples : [];
                         const permanentLocal = Array.isArray(this.permanentlyDeletedSamples) ? this.permanentlyDeletedSamples : [];
@@ -3329,7 +3342,7 @@
                     this.permanentlyDeletedSamples = this.permanentlyDeletedSamples.filter(x => String(x.key || '') !== key);
                     const {deletedAt,deletedBy,...sample}=item;
                     this.samples.push(sample);
-                    await this.persistAppState('restore-sample');
+                    await this.persistAppState('restore-sample', { restoredSampleKey: key });
                     this.showToast(this.lang==='ar'?'تمت استعادة العينة':'Sample restored');
                 },
                 async permanentlyDeleteSample(item) {

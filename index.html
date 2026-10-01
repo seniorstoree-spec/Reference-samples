@@ -38,6 +38,12 @@
         .qc-sidebar-scroll {
             scrollbar-width: thin;
         }
+        /* Keep the in-page sidebar visually isolated from the content column without changing its appearance. */
+        .qc-sidebar-mobile { isolation: isolate; background-color: #fff; }
+        @media (min-width: 1024px) {
+            .qc-sidebar-mobile { align-self: start; }
+        }
+
         @media (max-width: 1023px) {
             .qc-sidebar-mobile {
                 position: relative !important;
@@ -218,7 +224,7 @@
         </header>
 
         <!-- Main Application Sidebar -->
-        <aside class="qc-sidebar-mobile relative w-full lg:w-64 lg:min-w-64 lg:sticky lg:top-8 lg:h-[calc(100vh-4rem)] bg-white border border-gray-200 rounded-2xl shadow-md flex flex-col overflow-hidden lg:col-start-1 lg:row-start-2">
+        <aside class="qc-sidebar-mobile relative z-30 w-full lg:w-64 lg:min-w-64 lg:sticky lg:top-8 lg:h-[calc(100vh-4rem)] bg-white border border-gray-200 rounded-2xl shadow-md flex flex-col overflow-hidden lg:col-start-1 lg:row-start-2">
             <div class="p-5 bg-gradient-to-b from-blue-900 to-blue-800 text-white">
                 <div class="flex items-center gap-3">
                     <div class="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center text-2xl">🧪</div>
@@ -263,7 +269,7 @@
             </div>
         </aside>
 
-        <div class="min-w-0 w-full flex flex-col gap-8 lg:col-start-2 lg:row-start-2">
+        <div class="min-w-0 w-full flex flex-col gap-8 lg:col-start-2 lg:row-start-2 lg:relative lg:z-10">
         <div v-if="currentSection === 'dashboard'" class="flex flex-col gap-8">
         <!-- Dashboard User Header -->
         <div class="bg-gradient-to-r from-blue-900 to-blue-700 text-white rounded-xl shadow-lg p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -496,7 +502,7 @@
         </section>
 
         <!-- Data Registry with Filters -->
-        <section v-if="['active','archived','rejected','catalog'].includes(currentSection)" class="bg-white rounded-lg shadow-md overflow-hidden border-t-4 border-gray-700">
+        <section v-if="['active','archived','rejected'].includes(currentSection)" class="bg-white rounded-lg shadow-md overflow-hidden border-t-4 border-gray-700">
             
 
 
@@ -764,8 +770,9 @@
             </div>
         
             </div>
-            <!-- Product Master Catalog (Tab: catalog) -->
-        <section v-else-if="currentTab === 'catalog'" class="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden mb-8">
+            </section>
+        <!-- Product Master Catalog / Permissions Guide -->
+        <section v-if="currentSection === 'catalog'" class="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden mb-8">
             <div class="p-6 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
                 <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
                     <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
@@ -879,7 +886,6 @@
                 </div>
             </div>
         </section>
-</section>
         <!-- Deleted Items -->
         <section v-if="currentSection === 'deleted'" class="bg-white rounded-lg shadow-md overflow-hidden">
             <div class="p-6 border-b bg-red-50 flex justify-between items-center gap-4">

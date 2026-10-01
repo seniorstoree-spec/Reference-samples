@@ -2091,23 +2091,42 @@
                         return;
                     }
 
-                    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pwd });
-                    if (error || !data?.user) {
-                        console.error('[Auth] Sign-in error:', error);
-                        if (error?.code === 'email_not_confirmed' || /email not confirmed/i.test(error?.message || '')) {
-                            this.auth.error = this.lang === 'ar'
-                                ? 'هذا الحساب غير مُفعّل بعد. بالنسبة للحساب العادي بدون بريد، تأكد من اسم المستخدم وكلمة المرور ثم حاول مرة أخرى.'
-                                : 'This account is not activated yet. For a username account, verify the username and password and try again.';
-                        } else {
-                            this.auth.error = this.lang === 'ar' ? 'اسم المستخدم/البريد الإلكتروني أو كلمة المرور غير صحيحة' : 'Username/email or password is incorrect';
+                    try {
+                        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pwd });
+                        if (error || !data?.user) {
+                            console.error('[Auth] Sign-in error:', error);
+                            const message = error?.message || '';
+                            if (error?.code === 'email_not_confirmed' || /email not confirmed/i.test(message)) {
+                                this.auth.error = this.lang === 'ar'
+                                    ? 'الحساب غير مُفعّل في Supabase. الحساب العادي يحتاج أن يكون مُفعّلًا حتى يتم تسجيل الدخول.'
+                                    : 'This account is not activated in Supabase.';
+                            } else if (/invalid login credentials/i.test(message)) {
+                                this.auth.error = this.lang === 'ar'
+                                    ? 'اسم المستخدم أو كلمة المرور غير صحيحة. تأكد من كتابة اسم المستخدم كما تم إنشاؤه.'
+                                    : 'Username or password is incorrect.';
+                            } else {
+                                this.auth.error = this.lang === 'ar'
+                                    ? 'تعذر تسجيل الدخول: ' + message
+                                    : 'Login failed: ' + (message || 'Unknown authentication error');
+                            }
+                            return;
                         }
-                        return;
-                    }
 
-                    await this.applySupabaseUser(data.user);
-                    this.loginForm.password = '';
-                    this.appView = 'qc';
-                    await this.initializeSupabaseSync();
+                        await this.applySupabaseUser(data.user);
+                        this.loginForm.password = '';
+                        this.appView = 'qc';
+                        try {
+                            await this.initializeSupabaseSync();
+                        } catch (syncError) {
+                            console.error('[Auth] Post-login sync failed:', syncError);
+                            // Authentication already succeeded; do not send the user back to the login screen.
+                        }
+                    } catch (loginError) {
+                        console.error('[Auth] Unexpected login exception:', loginError);
+                        this.auth.error = this.lang === 'ar'
+                            ? 'حدث خطأ أثناء الاتصال بخدمة تسجيل الدخول. افتح الصفحة مرة أخرى وحاول.'
+                            : 'A login service error occurred. Refresh the page and try again.';
+                    }
                 },
                 async logout() {
                     try {

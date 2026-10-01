@@ -51,7 +51,7 @@
     <script src="data/masterCatalog.js"></script>
 </head>
 <body class="bg-gray-100 text-gray-800 p-8">
-    <div id="app" class="w-full max-w-[1600px] mx-auto flex flex-col gap-8 relative h-full lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start">
+    <div id="app" class="w-full max-w-[1600px] mx-auto flex flex-col gap-8 relative min-h-screen">
 
         <!-- Login Screen -->
         <div v-if="appView === 'login'" class="fixed inset-0 bg-gray-100 flex items-center justify-center z-[100]">
@@ -189,10 +189,10 @@
         </div>
 
         <!-- Main QC Application -->
-        <div v-else-if="appView === 'qc'" class="w-full flex flex-col gap-8 animate-fade-in">
+        <div v-else-if="appView === 'qc'" class="w-full grid grid-cols-1 lg:grid-cols-[16rem_minmax(0,1fr)] gap-8 items-start animate-fade-in">
         
         <!-- Header -->
-        <header class="bg-white p-6 rounded-lg shadow-md flex justify-between items-start md:items-center flex-col md:flex-row gap-4 lg:col-span-2">
+        <header class="bg-white p-6 rounded-lg shadow-md flex justify-between items-start md:items-center flex-col md:flex-row gap-4 lg:col-span-2 lg:col-start-1">
             <div>
                 <h1 class="text-3xl font-bold text-blue-900">{{ t('title') }}</h1>
                 <p class="text-gray-600 mt-2">{{ t('subtitle') }}</p>
@@ -263,7 +263,7 @@
             </div>
         </aside>
 
-        <div class="min-w-0 flex flex-col gap-8 lg:col-start-2 lg:row-start-2 lg:pe-0">
+        <div class="min-w-0 w-full flex flex-col gap-8 lg:col-start-2 lg:row-start-2">
         <div v-if="currentSection === 'dashboard'" class="flex flex-col gap-8">
         <!-- Dashboard User Header -->
         <div class="bg-gradient-to-r from-blue-900 to-blue-700 text-white rounded-xl shadow-lg p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

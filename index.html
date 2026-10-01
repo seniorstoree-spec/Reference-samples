@@ -206,7 +206,7 @@
         </div>
 
         <!-- Main QC Application -->
-        <div v-else-if="appView === 'qc'" class="w-full grid grid-cols-1 lg:grid-cols-[16rem_minmax(0,1fr)] gap-8 items-start animate-fade-in">
+        <div v-else-if="appView === 'qc'" class="w-full grid grid-cols-1 lg:grid-cols-[16rem_minmax(0,1fr)] gap-8 items-start animate-fade-in lg:relative lg:isolate">
         
         <!-- Header -->
         <header class="bg-white p-6 rounded-lg shadow-md flex justify-between items-start md:items-center flex-col md:flex-row gap-4 lg:col-span-2 lg:col-start-1">
@@ -235,7 +235,7 @@
         </header>
 
         <!-- Main Application Sidebar -->
-        <aside class="qc-sidebar-mobile relative z-30 w-full lg:w-64 lg:min-w-64 lg:sticky lg:top-8 lg:h-[calc(100vh-4rem)] bg-white border border-gray-200 rounded-2xl shadow-md flex flex-col overflow-hidden lg:col-start-1 lg:row-start-2">
+        <aside class="qc-sidebar-mobile relative z-20 w-full lg:w-64 lg:min-w-64 lg:sticky lg:top-8 lg:h-[calc(100vh-4rem)] bg-white border border-gray-200 rounded-2xl shadow-md flex flex-col overflow-hidden lg:col-start-1 lg:row-start-2">
             <div class="p-5 bg-gradient-to-b from-blue-900 to-blue-800 text-white">
                 <div class="flex items-center gap-3">
                     <div class="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center text-2xl">🧪</div>
@@ -280,7 +280,7 @@
             </div>
         </aside>
 
-        <div class="min-w-0 w-full flex flex-col gap-8 lg:col-start-2 lg:row-start-2 lg:relative lg:z-10">
+        <div class="min-w-0 w-full max-w-full flex flex-col gap-8 lg:col-start-2 lg:row-start-2 lg:relative lg:z-10 lg:overflow-visible">
         <div v-if="currentSection === 'dashboard'" class="flex flex-col gap-8">
         <!-- Dashboard User Header -->
         <div class="bg-gradient-to-r from-blue-900 to-blue-700 text-white rounded-xl shadow-lg p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

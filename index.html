@@ -1452,12 +1452,11 @@
             
 
             async mounted() {
-                // TEMPORARY ACCESS MODE: always keep the QC application visible while authentication is being repaired.
-                this.appView = 'qc';
-                this.auth.isAuthenticated = true;
-                this.auth.role = 'user';
-                this.auth.username = 'مستخدم مؤقت';
-                // Supabase is optional for the UI boot. Never dereference a missing CDN client.
+                // Authentication is required before entering the application.
+                // A persisted Supabase session may restore the user automatically.
+                this.appView = 'login';
+                this.auth = { isAuthenticated: false, role: null, username: '', email: null, error: '', loading: false };
+
                 if (supabaseClient) {
                     try {
                         const { data: { session } } = await supabaseClient.auth.getSession();
@@ -1468,6 +1467,7 @@
                         supabaseClient.auth.onAuthStateChange(async (event, session) => {
                             if (session?.user) {
                                 await this.applySupabaseUser(session.user);
+                                this.appView = 'qc';
                             } else if (event === 'SIGNED_OUT') {
                                 this.auth = { isAuthenticated: false, role: null, username: '', email: null, error: '', loading: false };
                                 this.appView = 'login';
@@ -1475,9 +1475,15 @@
                         });
                     } catch (e) {
                         console.error('[Auth] Session initialization failed:', e);
+                        this.auth.error = this.lang === 'ar'
+                            ? 'تعذر التحقق من جلسة الدخول. حاول تسجيل الدخول مرة أخرى.'
+                            : 'Could not verify the login session. Please sign in again.';
                     }
                 } else {
-                    console.warn('[Auth] Supabase CDN unavailable; starting in local UI mode.');
+                    this.auth.error = this.lang === 'ar'
+                        ? 'خدمة تسجيل الدخول غير متاحة حاليًا. أعد تحميل الصفحة وحاول مرة أخرى.'
+                        : 'The login service is currently unavailable. Reload the page and try again.';
+                    console.error('[Auth] Supabase client is unavailable.');
                 }
                 // Migration: Sync all loaded samples with master catalog rules
                 let migrated = false;
@@ -2331,14 +2337,17 @@
                 },
                 async logout() {
                     try {
-                        await supabaseClient.auth.signOut();
+                        if (supabaseClient) {
+                            await supabaseClient.auth.signOut();
+                        }
                     } catch (e) {
                         console.error('[Auth] Sign-out error:', e);
                     }
-                    this.auth = { isAuthenticated: true, role: 'user', username: 'مستخدم مؤقت', email: null, error: '' };
-                    this.appView = 'qc';
+                    this.auth = { isAuthenticated: false, role: null, username: '', email: null, error: '', loading: false };
+                    this.appView = 'login';
                     this.loginForm.password = '';
                     this.loginForm.username = '';
+                    this.loginForm.email = '';
                 },
                 async addUser() {
                     const uname = this.adminForm.newUsername.trim().toLowerCase();

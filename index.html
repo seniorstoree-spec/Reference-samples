@@ -1558,6 +1558,17 @@
             
 
             async mounted() {
+                // A restored/stale Supabase session must never open password recovery.
+                // Only an explicit recovery callback in the current URL may do that.
+                const recoveryUrl = (() => {
+                    try {
+                        const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+                        const query = new URLSearchParams(window.location.search);
+                        const type = (hash.get('type') || query.get('type') || '').toLowerCase();
+                        const hasRecoveryToken = Boolean(hash.get('access_token') || hash.get('refresh_token') || hash.get('code') || query.get('code'));
+                        return type === 'recovery' || (hasRecoveryToken && /recovery/i.test(window.location.href));
+                    } catch (_) { return false; }
+                })();
                 // Authentication is required before entering the application.
                 // A persisted Supabase session may restore the user automatically.
                 this.appView = 'login';
@@ -1566,12 +1577,12 @@
                 if (supabaseClient) {
                     try {
                         const { data: { session } } = await supabaseClient.auth.getSession();
-                        if (session?.user) {
+                        if (session?.user && !recoveryUrl) {
                             await this.applySupabaseUser(session.user);
                             this.appView = 'qc';
                         }
                         supabaseClient.auth.onAuthStateChange(async (event, session) => {
-                            if (event === 'PASSWORD_RECOVERY') {
+                            if (event === 'PASSWORD_RECOVERY' && recoveryUrl) {
                                 if (session?.user) {
                                     await this.applySupabaseUser(session.user);
                                 }
@@ -2334,6 +2345,7 @@
                         this.showRecoveryPassword = false;
                         this.auth = { isAuthenticated: false, role: null, username: '', email: null, error: '', loading: false };
                         this.appView = 'login';
+                        try { window.history.replaceState({}, document.title, window.location.pathname); } catch (_) {}
                         this.auth.error = this.lang === 'ar'
                             ? 'تم تغيير كلمة المرور بنجاح. يمكنك الآن تسجيل الدخول بكلمة المرور الجديدة.'
                             : 'Password changed successfully. You can now sign in with your new password.';

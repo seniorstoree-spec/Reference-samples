@@ -12,9 +12,12 @@
         // Supabase backend configuration - publishable key only.
         const SUPABASE_URL = 'https://eituitykmrmuxktnixwv.supabase.co';
         const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_Npn3KbLZ78yMJw73aNAKcQ_iY4JPBC3';
-        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-            auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
-        });
+        // Supabase is optional during the temporary no-login mode. Never let a CDN/backend load failure prevent the UI from rendering.
+        const supabaseClient = window.supabase?.createClient
+            ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+                auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+            })
+            : null;
     </script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -1478,7 +1481,16 @@
                 this.$nextTick(() => {
                     this.updateCharts();
                 });
-                await this.initializeSupabaseSync();
+                // Temporary no-login mode: the UI must remain usable even if Supabase is unavailable.
+                if (supabaseClient) {
+                    try {
+                        await this.initializeSupabaseSync();
+                    } catch (e) {
+                        console.error('[Supabase] Initial sync skipped:', e);
+                    }
+                } else {
+                    console.warn('[Supabase] Client unavailable; continuing in local UI mode.');
+                }
                 this.$nextTick(() => {
                     this.updateCharts();
                 });
@@ -3094,6 +3106,10 @@
                     }
                 },
                 updateCharts() {
+                    if (typeof Chart === 'undefined') {
+                        console.warn('[Charts] Chart.js is unavailable; dashboard charts will be skipped.');
+                        return;
+                    }
                     const canvasResults = document.getElementById('chartResults');
                     const canvasCategories = document.getElementById('chartCategory');
                     const canvasDefects = document.getElementById('chartDefects');

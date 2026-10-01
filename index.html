@@ -3254,7 +3254,8 @@
                         statusOverride: null,
                         notes: (this.form.notes || '').trim(), 
                         terminalTimestamp: null, 
-                        expanded: true, 
+                        // Keep the inspection schedule collapsed until the user opens it with the arrow.
+                        expanded: false, 
                         inspections: smartInspections
                     };
                     this.samples.push(newSample);

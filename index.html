@@ -266,7 +266,7 @@
                 </button>
                 <button @click="navigateSection('deleted')" :class="sidebarButtonClass('deleted')" class="w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition-all text-start">
                     <span class="flex items-center gap-3"><span class="text-xl">🗑️</span><span>{{ lang === 'ar' ? 'المحذوفات' : 'Deleted Items' }}</span></span>
-                    <span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{{ formatNum(deletedTotalCount()) }}</span>
+                    <span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{{ formatNum(deletedTotalCount) }}</span>
                 </button>
                 <button @click="navigateSection('catalog')" :class="sidebarButtonClass('catalog')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all text-start">
                     <span class="text-xl">📚</span><span>{{ lang === 'ar' ? 'دليل الأصناف والصلاحيات' : 'Catalog & Permissions' }}</span>

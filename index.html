@@ -1380,10 +1380,10 @@
                 }
 
                 return {
-                    // TEMPORARY: bypass authentication and open the QC application directly.
-                    // Set to false to restore the login screen later.
-                    appView: 'qc',
-                    auth: { isAuthenticated: true, role: 'user', username: 'مستخدم مؤقت', email: null, error: '', loading: false },
+                    // Authentication is required before entering the application.
+                    // A valid Supabase session will switch the user to the QC application automatically.
+                    appView: 'login',
+                    auth: { isAuthenticated: false, role: null, username: '', email: null, error: '', loading: false },
                     users: initialUsers,
                     loginForm: { email: '', username: '', password: '' },
                     authMode: 'email',
@@ -1469,8 +1469,8 @@
                             if (session?.user) {
                                 await this.applySupabaseUser(session.user);
                             } else if (event === 'SIGNED_OUT') {
-                                this.auth = { isAuthenticated: true, role: 'user', username: 'مستخدم مؤقت', email: null, error: '', loading: false };
-                                this.appView = 'qc';
+                                this.auth = { isAuthenticated: false, role: null, username: '', email: null, error: '', loading: false };
+                                this.appView = 'login';
                             }
                         });
                     } catch (e) {

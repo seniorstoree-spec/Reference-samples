@@ -2066,9 +2066,9 @@
                             options: {
                                 data: {
                                     display_name: displayName,
-                                    ...(this.authMode === 'username' ? { username: displayName, account_type: 'username' } : { account_type: 'email' })
+                                    ...(resolvedAuthMode === 'username' ? { username: displayName, account_type: 'username' } : { account_type: 'email' })
                                 },
-                                ...(this.authMode === 'email' ? { emailRedirectTo: window.location.href } : {})
+                                ...(resolvedAuthMode === 'email' ? { emailRedirectTo: window.location.href } : {})
                             }
                         });
                         if (error) {
@@ -2084,7 +2084,7 @@
                             await this.initializeSupabaseSync();
                         } else {
                             this.isSignupMode = false;
-                            this.auth.error = this.authMode === 'username'
+                            this.auth.error = resolvedAuthMode === 'username'
                                 ? (this.lang === 'ar' ? 'تم إنشاء الحساب بنجاح. يمكنك الآن تسجيل الدخول باسم المستخدم.' : 'Account created successfully. You can now sign in with your username.')
                                 : (this.lang === 'ar' ? 'تم إنشاء الحساب. افتح رسالة تأكيد البريد الإلكتروني ثم ارجع وسجّل الدخول.' : 'Account created. Confirm your email, then return and sign in.');
                         }

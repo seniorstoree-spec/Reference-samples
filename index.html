@@ -257,8 +257,8 @@
                     <span class="flex items-center gap-3"><span class="text-xl">🗑️</span><span>{{ lang === 'ar' ? 'المحذوفات' : 'Deleted Items' }}</span></span>
                     <span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{{ formatNum(deletedTotalCount) }}</span>
                 </button>
-                <button @click="navigateSection('catalog')" :class="sidebarButtonClass('catalog')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all text-start">
-                    <span class="text-xl">📚</span><span>{{ t('masterCatalogTab') }}</span>
+                <button @click="navigateSection('permissions')" :disabled="auth.role !== 'admin'" :class="sidebarButtonClass('permissions')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all text-start">
+                    <span class="text-xl">📚</span><span>{{ lang === 'ar' ? 'دليل الأصناف والصلاحيات' : 'Catalog & Permissions' }}</span>
                 </button>
             </nav>
             <div class="p-3 border-t bg-gray-50">
@@ -1805,6 +1805,24 @@
                     local.forEach(x => { const k=this.getSampleKey(x); if(!k)return; const old=byKey.get(k); if(!old) byKey.set(k,x); else if(new Date(x.updatedAt||0)>new Date(old.updatedAt||0)) byKey.set(k,x); });
                     return Array.from(byKey.values());
                 },
+                async refreshDeletedItems() {
+                    try {
+                        const local = JSON.parse(localStorage.getItem('QC_DELETED_SAMPLES') || '[]');
+                        if (Array.isArray(local)) this.deletedSamples = this.mergeDeletedItems(local, this.deletedSamples);
+                        const { data, error } = await supabaseClient
+                            .from('reference_app_state')
+                            .select('deleted_samples')
+                            .eq('id', 1)
+                            .maybeSingle();
+                        if (error) throw error;
+                        if (data && Array.isArray(data.deleted_samples)) {
+                            this.deletedSamples = this.mergeDeletedItems(data.deleted_samples, this.deletedSamples);
+                            localStorage.setItem('QC_DELETED_SAMPLES', JSON.stringify(this.deletedSamples));
+                        }
+                    } catch (e) {
+                        console.warn('[Deleted Items] Refresh failed:', e);
+                    }
+                },
                 async createStateSnapshot(reason = 'automatic') {
                     try {
                         const { data: current, error: readError } = await supabaseClient
@@ -2784,9 +2802,17 @@
                     this.closeModal();
                 },
                 navigateSection(section) {
+                    if (section === 'permissions') {
+                        if (this.auth.role === 'admin') { this.appView = 'admin'; }
+                        else { this.showToast(this.lang === 'ar' ? 'هذا القسم متاح للمشرف فقط' : 'This section is available to administrators only', 'error'); }
+                        return;
+                    }
                     this.currentSection = section;
                     if (['active', 'archived', 'rejected', 'catalog'].includes(section)) {
                         this.currentTab = section;
+                    }
+                    if (section === 'deleted') {
+                        this.refreshDeletedItems();
                     }
                     if (section === 'dashboard') {
                         this.activeKpiFilter = null;

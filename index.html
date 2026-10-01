@@ -1340,8 +1340,10 @@
                 }
 
                 return {
-                    appView: 'login',
-                    auth: { isAuthenticated: false, role: null, username: null, email: null, error: '', loading: false },
+                    // TEMPORARY: bypass authentication and open the QC application directly.
+                    // Set to false to restore the login screen later.
+                    appView: 'qc',
+                    auth: { isAuthenticated: true, role: 'user', username: 'مستخدم مؤقت', email: null, error: '', loading: false },
                     users: initialUsers,
                     loginForm: { email: '', username: '', password: '' },
                     authMode: 'email',
@@ -1420,8 +1422,9 @@
                         if (session?.user) {
                             await this.applySupabaseUser(session.user);
                         } else if (event === 'SIGNED_OUT') {
-                            this.auth = { isAuthenticated: false, role: null, username: null, email: null, error: '', loading: false };
-                            this.appView = 'login';
+                            // Authentication is temporarily bypassed; keep the application open.
+                            this.auth = { isAuthenticated: true, role: 'user', username: 'مستخدم مؤقت', email: null, error: '', loading: false };
+                            this.appView = 'qc';
                         }
                     });
                 } catch (e) {
@@ -2263,8 +2266,8 @@
                     } catch (e) {
                         console.error('[Auth] Sign-out error:', e);
                     }
-                    this.auth = { isAuthenticated: false, role: null, username: null, email: null, error: '' };
-                    this.appView = 'login';
+                    this.auth = { isAuthenticated: true, role: 'user', username: 'مستخدم مؤقت', email: null, error: '' };
+                    this.appView = 'qc';
                     this.loginForm.password = '';
                     this.loginForm.username = '';
                 },

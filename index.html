@@ -717,39 +717,39 @@
                                             </button>
                                         </div>
                                         <div class="overflow-x-auto">
-                                            <table class="w-full text-sm text-start border-collapse">
-                                                <thead>
-                                                    <tr class="text-gray-600 bg-white border-b">
-                                                        <th class="p-3 font-semibold text-start">{{ t('colStage') }}</th>
-                                                        <th class="p-3 font-semibold text-start">{{ t('colSchedDate') }}</th>
-                                                        <th class="p-3 font-semibold text-start">{{ t('colStageStatus') }}</th>
-                                                        <th class="p-3 font-semibold text-start">{{ t('colTestedDate') }}</th>
-                                                        <th class="p-3 font-semibold text-start">{{ t('colInspector') }}</th>
-                                                        <th class="p-3 font-semibold text-start">{{ t('colResult') }}</th>
-                                                        <th class="p-3 font-semibold text-center">{{ t('colActions') }}</th>
+                                            <table class="w-full min-w-[980px] table-fixed text-sm text-start border-collapse">
+                                                <thead class="bg-gray-100 text-gray-700 border-b-2 border-gray-200">
+                                                    <tr>
+                                                        <th class="p-3 font-extrabold text-start align-middle w-[16%]">{{ t('colStage') }}</th>
+                                                        <th class="p-3 font-extrabold text-center align-middle w-[16%]">{{ t('colSchedDate') }}</th>
+                                                        <th class="p-3 font-extrabold text-center align-middle w-[15%]">{{ t('colStageStatus') }}</th>
+                                                        <th class="p-3 font-extrabold text-center align-middle w-[16%]">{{ t('colTestedDate') }}</th>
+                                                        <th class="p-3 font-extrabold text-start align-middle w-[25%]">{{ t('colResult') }}</th>
+                                                        <th class="p-3 font-extrabold text-center align-middle w-[12%]">{{ t('colActions') }}</th>
                                                     </tr>
                                                 </thead>
-                                                <tbody>
+                                                <tbody class="divide-y divide-gray-100">
                                                     <tr v-if="sample.inspections.length === 0">
-                                                        <td colspan="7" class="p-4 text-center text-gray-500 italic">{{ t('noInspections') }}</td>
+                                                        <td colspan="6" class="p-4 text-center text-gray-500 italic">{{ t('noInspections') }}</td>
                                                     </tr>
-                                                    <tr v-for="(insp, index) in sample.inspections" :key="insp.id" class="border-b last:border-0 hover:bg-blue-50/30 transition-colors">
-                                                        <td class="p-2">
-                                                            <div class="font-bold text-gray-700 px-2">{{ t(insp.stage) }}</div>
+                                                    <tr v-for="(insp, index) in sample.inspections" :key="insp.id" class="bg-white hover:bg-blue-50/50 transition-colors align-middle">
+                                                        <td class="p-3 align-middle">
+                                                            <div class="font-bold text-gray-800 px-2 leading-6 break-words">{{ t(insp.stage) }}</div>
                                                         </td>
-                                                        <td class="p-2">
-                                                            <input type="date" v-model="insp.scheduledDate" @change="saveInspectionSchedule(sample, insp)" placeholder="dd/mm/yyyy" class="w-full bg-white border border-transparent hover:border-gray-300 focus:border-blue-500 rounded px-2 py-1.5 transition-colors text-gray-700 font-mono text-sm" dir="ltr">
+                                                        <td class="p-3 align-middle">
+                                                            <input type="date" v-model="insp.scheduledDate" @change="saveInspectionSchedule(sample, insp)" placeholder="dd/mm/yyyy" class="w-full max-w-full bg-gray-50 border border-gray-200 hover:border-blue-300 focus:border-blue-500 rounded-lg px-2 py-2 transition-colors text-gray-700 font-mono text-sm shadow-sm" dir="ltr">
                                                         </td>
-                                                        <td class="p-2">
-                                                            <span :class="getInspectionStatusBadge(getInspectionStatus(insp))" class="px-2.5 py-1 rounded text-xs font-bold whitespace-nowrap shadow-sm border">
+                                                        <td class="p-3 text-center align-middle">
+                                                            <span :class="getInspectionStatusBadge(getInspectionStatus(insp))" class="inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-extrabold whitespace-nowrap shadow-sm border">
                                                                 {{ t(getInspectionStatus(insp)) }}
                                                             </span>
                                                         </td>
-                                                        <td class="p-2">
-                                                            <div v-if="insp.testedDate" class="text-gray-800 font-mono text-sm px-2" dir="ltr">{{ formatDate(insp.testedDate) }}</div>
+                                                        <td class="p-3 text-center align-middle">
+                                                            <div v-if="insp.testedDate" class="inline-block text-gray-800 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 font-mono text-sm shadow-sm" dir="ltr">{{ formatDate(insp.testedDate) }}</div>
                                                             <div v-else class="text-gray-400 italic text-xs px-2">{{ t('pending') }}</div>
                                                         </td>
-                                                        <td class="p-2 font-medium">
+                                                        <td class="p-3 align-middle font-medium">
+                                                            <div class="flex flex-col gap-2 min-w-0">
                                                             <span v-if="insp.result" :class="getResultBadgeClass(insp.result)">{{ t(insp.result) }}</span>
                                                             <span v-else class="text-gray-400 italic text-xs px-2">--</span>
                                                             
@@ -767,11 +767,12 @@
                                                                     {{ t(tag) }}
                                                                 </span>
                                                             </div>
-                                                            <div v-if="insp.notes || insp.rejectionReason" class="mt-1 text-[11px] text-gray-500 italic max-w-xs break-words">
+                                                            <div v-if="insp.notes || insp.rejectionReason" class="mt-1 text-[11px] text-gray-500 italic max-w-xs break-words bg-gray-50 border border-gray-100 rounded-md px-2 py-1">
                                                                 "{{ insp.notes || insp.rejectionReason }}"
                                                             </div>
+                                                            </div>
                                                         </td>
-                                                        <td class="p-2 text-center whitespace-nowrap">
+                                                        <td class="p-3 text-center align-middle whitespace-nowrap">
                                                             <button @click="openModal(sample, insp)" class="text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1 rounded hover:bg-blue-100 text-xs font-bold me-2 border border-blue-200 transition-colors">
                                                                 <span v-if="insp.result">{{ t('editResult') }}</span>
                                                                 <span v-else>{{ t('recordResult') }}</span>

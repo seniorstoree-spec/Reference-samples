@@ -2031,9 +2031,18 @@
 
                     let email = '';
                     let displayName = '';
+                    let resolvedAuthMode = this.authMode;
 
-                    if (this.authMode === 'username') {
-                        const username = (this.loginForm.username || '').trim().toLowerCase();
+                    // Be forgiving about the selected login tab:
+                    // if the user enters a username in the email field, treat it as a username account.
+                    const rawIdentifier = this.authMode === 'username'
+                        ? (this.loginForm.username || '').trim()
+                        : (this.loginForm.email || '').trim();
+                    const identifier = rawIdentifier.toLowerCase();
+
+                    if (this.authMode === 'username' || (identifier && !identifier.includes('@'))) {
+                        resolvedAuthMode = 'username';
+                        const username = identifier;
                         if (!/^[a-z0-9._-]{3,30}$/.test(username)) {
                             this.auth.error = this.lang === 'ar' ? 'اسم المستخدم يجب أن يكون 3-30 حرفًا ويحتوي على حروف إنجليزية أو أرقام أو . _ - فقط' : 'Username must be 3-30 characters and use only letters, numbers, dot, underscore or hyphen';
                             return;
@@ -2041,9 +2050,10 @@
                         email = this.buildLocalAuthEmail(username);
                         displayName = username;
                     } else {
-                        email = (this.loginForm.email || '').trim().toLowerCase();
+                        resolvedAuthMode = 'email';
+                        email = identifier;
                         if (!email) {
-                            this.auth.error = this.lang === 'ar' ? 'يرجى إدخال البريد الإلكتروني' : 'Please enter your email';
+                            this.auth.error = this.lang === 'ar' ? 'يرجى إدخال البريد الإلكتروني أو اسم المستخدم' : 'Please enter your email or username';
                             return;
                         }
                         displayName = email.split('@')[0];

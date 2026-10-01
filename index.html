@@ -1326,7 +1326,16 @@
                 // Details are opened only by the dedicated arrow button.
                 initialSamples = initialSamples.map(sample => ({ ...sample, expanded: false }));
 
-                const initialUsers = [];
+                let initialUsers = [];
+                try {
+                    const storedUsers = localStorage.getItem('QC_USERS');
+                    if (storedUsers) {
+                        const parsedUsers = JSON.parse(storedUsers);
+                        if (Array.isArray(parsedUsers)) initialUsers = parsedUsers;
+                    }
+                } catch (e) {
+                    console.warn('[QC Storage Boot] Users parse error:', e);
+                }
 
                 return {
                     appView: 'login',
@@ -2122,6 +2131,11 @@
                     // The old implementation only wrote to localStorage, while login uses Supabase Auth.
                     // That mismatch made newly-created normal accounts impossible to activate/login.
                     try {
+                        // Preserve the administrator session because Supabase client-side signUp
+                        // may return a session when email confirmation is disabled.
+                        const { data: adminSessionData } = await supabaseClient.auth.getSession();
+                        const adminSession = adminSessionData?.session || null;
+
                         const email = this.buildLocalAuthEmail(uname);
                         const { data, error } = await supabaseClient.auth.signUp({
                             email,
@@ -2135,6 +2149,20 @@
                                 }
                             }
                         });
+
+                        // Never leave the administrator logged in as the newly-created user.
+                        if (adminSession?.access_token && adminSession?.refresh_token) {
+                            try {
+                                await supabaseClient.auth.setSession({
+                                    access_token: adminSession.access_token,
+                                    refresh_token: adminSession.refresh_token
+                                });
+                                await this.applySupabaseUser(adminSession.user);
+                                this.appView = 'admin';
+                            } catch (restoreError) {
+                                console.warn('[Admin] Could not restore administrator session:', restoreError);
+                            }
+                        }
 
                         if (error) {
                             console.error('[Admin] Supabase user creation failed:', error);

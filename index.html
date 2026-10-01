@@ -2107,27 +2107,73 @@
                     }
 
                     try {
-                        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pwd });
-                        if (error || !data?.user) {
-                            console.error('[Auth] Sign-in error:', error);
-                            const message = error?.message || '';
-                            if (error?.code === 'email_not_confirmed' || /email not confirmed/i.test(message)) {
-                                this.auth.error = this.lang === 'ar'
-                                    ? 'الحساب غير مُفعّل في Supabase. الحساب العادي يحتاج أن يكون مُفعّلًا حتى يتم تسجيل الدخول.'
-                                    : 'This account is not activated in Supabase.';
-                            } else if (/invalid login credentials/i.test(message)) {
-                                this.auth.error = this.lang === 'ar'
-                                    ? 'اسم المستخدم أو كلمة المرور غير صحيحة. تأكد من كتابة اسم المستخدم كما تم إنشاؤه.'
-                                    : 'Username or password is incorrect.';
-                            } else {
-                                this.auth.error = this.lang === 'ar'
-                                    ? 'تعذر تسجيل الدخول: ' + message
-                                    : 'Login failed: ' + (message || 'Unknown authentication error');
+                        let authUser = null;
+
+                        if (resolvedAuthMode === 'username') {
+                            // Username accounts use a server-side Auth token flow. This removes the
+                            // fragile dependency on browser-side fake-email handling while keeping
+                            // Supabase Auth as the single source of truth.
+                            const response = await fetch(SUPABASE_URL + '/functions/v1/username-login', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'apikey': SUPABASE_PUBLISHABLE_KEY
+                                },
+                                body: JSON.stringify({ username: displayName, password: pwd })
+                            });
+                            const result = await response.json().catch(() => ({}));
+
+                            if (!response.ok || !result.access_token || !result.refresh_token) {
+                                const message = result.message || '';
+                                if (result.error === 'email_not_confirmed') {
+                                    this.auth.error = this.lang === 'ar'
+                                        ? 'هذا الحساب غير مُفعّل. قم بإنشائه من لوحة الإدارة مرة أخرى.'
+                                        : 'This account is not activated.';
+                                } else {
+                                    this.auth.error = this.lang === 'ar'
+                                        ? 'اسم المستخدم أو كلمة المرور غير صحيحة.'
+                                        : 'Username or password is incorrect.';
+                                }
+                                console.error('[Auth] Username sign-in failed:', result);
+                                return;
                             }
-                            return;
+
+                            const { data: sessionData, error: sessionError } = await supabaseClient.auth.setSession({
+                                access_token: result.access_token,
+                                refresh_token: result.refresh_token
+                            });
+                            if (sessionError || !sessionData?.user) {
+                                console.error('[Auth] Could not establish username session:', sessionError);
+                                this.auth.error = this.lang === 'ar'
+                                    ? 'تم التحقق من الحساب لكن تعذر فتح جلسة الدخول. أعد المحاولة.'
+                                    : 'The account was verified but the login session could not be established.';
+                                return;
+                            }
+                            authUser = sessionData.user;
+                        } else {
+                            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pwd });
+                            if (error || !data?.user) {
+                                console.error('[Auth] Sign-in error:', error);
+                                const message = error?.message || '';
+                                if (error?.code === 'email_not_confirmed' || /email not confirmed/i.test(message)) {
+                                    this.auth.error = this.lang === 'ar'
+                                        ? 'الحساب غير مُفعّل في Supabase. أكّد البريد الإلكتروني ثم حاول مرة أخرى.'
+                                        : 'This account is not activated. Confirm the email address and try again.';
+                                } else if (/invalid login credentials/i.test(message)) {
+                                    this.auth.error = this.lang === 'ar'
+                                        ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة.'
+                                        : 'Email or password is incorrect.';
+                                } else {
+                                    this.auth.error = this.lang === 'ar'
+                                        ? 'تعذر تسجيل الدخول: ' + message
+                                        : 'Login failed: ' + (message || 'Unknown authentication error');
+                                }
+                                return;
+                            }
+                            authUser = data.user;
                         }
 
-                        await this.applySupabaseUser(data.user);
+                        await this.applySupabaseUser(authUser);
                         this.loginForm.password = '';
                         this.appView = 'qc';
                         try {

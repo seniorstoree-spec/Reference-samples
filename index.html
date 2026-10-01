@@ -1795,7 +1795,7 @@
                     });
                 },
                 filteredSamples() {
-                    return this.samples.filter(sample => {
+                    const filtered = this.samples.filter(sample => {
                         const status = this.getStatus(sample);
                         
                         // KPI Filter Logic
@@ -1854,6 +1854,17 @@
                         }
                         return true;
                     });
+
+                    // Active Samples are shown newest-first. Use createdAt when available,
+                    // then fall back to the sample id for older records.
+                    if (this.currentTab === 'active') {
+                        filtered.sort((a, b) => {
+                            const timeA = new Date(a.createdAt || 0).getTime() || Number(a.id || 0);
+                            const timeB = new Date(b.createdAt || 0).getTime() || Number(b.id || 0);
+                            return timeB - timeA;
+                        });
+                    }
+                    return filtered;
                 }
             },
             beforeUnmount() {

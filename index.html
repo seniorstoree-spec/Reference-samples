@@ -1525,6 +1525,13 @@
                                         
                     deletedSamples: initialDeletedSamples,
                     deletedCatalog: initialDeletedCatalog,
+                    permanentlyDeletedSamples: (() => {
+                        try {
+                            const raw = localStorage.getItem('QC_PERMANENTLY_DELETED_SAMPLES');
+                            const parsed = raw ? JSON.parse(raw) : [];
+                            return Array.isArray(parsed) ? parsed : [];
+                        } catch (_) { return []; }
+                    })(),
                     
                     currentSection: 'dashboard',
                     currentTab: 'active', // active or archived
@@ -2054,7 +2061,7 @@
                     try {
                         const { data: current, error: readError } = await supabaseClient
                             .from('reference_app_state')
-                            .select('catalog,samples,deleted_samples,deleted_catalog,app_data_version')
+                            .select('catalog,samples,deleted_samples,deleted_catalog,permanently_deleted_samples,app_data_version')
                             .eq('id', 1)
                             .maybeSingle();
                         if (readError) throw readError;
@@ -2065,6 +2072,7 @@
                             samples: Array.isArray(current.samples) ? current.samples : [],
                             deleted_samples: Array.isArray(current.deleted_samples) ? current.deleted_samples : [],
                             deleted_catalog: Array.isArray(current.deleted_catalog) ? current.deleted_catalog : [],
+                            permanently_deleted_samples: Array.isArray(current.permanently_deleted_samples) ? current.permanently_deleted_samples : [],
                             app_data_version: current.app_data_version || window.APP_DATA_VERSION || '1.1.0',
                             snapshot_reason: reason
                         });
@@ -2102,9 +2110,21 @@
                                 Array.isArray(data.deleted_catalog) ? data.deleted_catalog : [],
                                 this.deletedCatalog
                             );
+                            const serverPermanent = Array.isArray(data.permanently_deleted_samples) ? data.permanently_deleted_samples : [];
+                            const localPermanent = Array.isArray(this.permanentlyDeletedSamples) ? this.permanentlyDeletedSamples : [];
+                            const permanentByKey = new Map();
+                            [...serverPermanent, ...localPermanent].forEach(item => {
+                                const key = item && item.key ? String(item.key) : '';
+                                if (key) permanentByKey.set(key, item);
+                            });
+                            this.permanentlyDeletedSamples = Array.from(permanentByKey.values());
+                            localStorage.setItem('QC_PERMANENTLY_DELETED_SAMPLES', JSON.stringify(this.permanentlyDeletedSamples));
                             localStorage.setItem('QC_DELETED_SAMPLES', JSON.stringify(this.deletedSamples));
                             localStorage.setItem('QC_DELETED_CATALOG', JSON.stringify(this.deletedCatalog));
-                            const deletedSampleKeys = new Set(this.deletedSamples.map(x=>this.getSampleKey(x)).filter(Boolean));
+                            const deletedSampleKeys = new Set([
+                                ...this.deletedSamples.map(x=>this.getSampleKey(x)),
+                                ...this.permanentlyDeletedSamples.map(x=>String(x.key || ''))
+                            ].filter(Boolean));
                             const deletedCatalogKeys = new Set(this.deletedCatalog.map(x=>this.getCatalogKey(x)).filter(Boolean));
 // Never replace a larger local sample set with a smaller server set.
                             // This protects data during refreshes and deployments.
@@ -2154,12 +2174,23 @@
                 async persistAppState(reason = 'automatic') {
                     try {
                         const { data: current, error: readError } = await supabaseClient.from('reference_app_state')
-                            .select('catalog,samples,deleted_samples,deleted_catalog,app_data_version').eq('id',1).maybeSingle();
+                            .select('catalog,samples,deleted_samples,deleted_catalog,permanently_deleted_samples,app_data_version').eq('id',1).maybeSingle();
                         if (readError) throw readError;
 
                         this.deletedSamples = this.mergeDeletedItems(current?.deleted_samples, this.deletedSamples);
                         this.deletedCatalog = this.mergeDeletedItems(current?.deleted_catalog, this.deletedCatalog);
-                        const ds = new Set(this.deletedSamples.map(x=>this.getSampleKey(x)).filter(Boolean));
+                        const permanentServer = Array.isArray(current?.permanently_deleted_samples) ? current.permanently_deleted_samples : [];
+                        const permanentLocal = Array.isArray(this.permanentlyDeletedSamples) ? this.permanentlyDeletedSamples : [];
+                        const permanentByKey = new Map();
+                        [...permanentServer, ...permanentLocal].forEach(item => {
+                            const key = item && item.key ? String(item.key) : '';
+                            if (key) permanentByKey.set(key, item);
+                        });
+                        this.permanentlyDeletedSamples = Array.from(permanentByKey.values());
+                        const ds = new Set([
+                            ...this.deletedSamples.map(x=>this.getSampleKey(x)),
+                            ...this.permanentlyDeletedSamples.map(x=>String(x.key || ''))
+                        ].filter(Boolean));
                         const dc = new Set(this.deletedCatalog.map(x=>this.getCatalogKey(x)).filter(Boolean));
 
                         const serverSamples = (Array.isArray(current?.samples)?current.samples:[]).filter(x=>!ds.has(this.getSampleKey(x)));
@@ -2178,6 +2209,7 @@
                         const { error } = await supabaseClient.from('reference_app_state').upsert({
                             id:1, catalog:mergedCatalog, samples:mergedSamples,
                             deleted_samples:this.deletedSamples, deleted_catalog:this.deletedCatalog,
+                            permanently_deleted_samples:this.permanentlyDeletedSamples,
                             app_data_version:window.APP_DATA_VERSION||'1.1.0', updated_at:new Date().toISOString()
                         }, {onConflict:'id'});
                         if(error) throw error;
@@ -2186,6 +2218,7 @@
                         localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD',JSON.stringify(this.samples));
                         localStorage.setItem('QC_MASTER_CATALOG_DATA',JSON.stringify(this.productCatalog));
                         localStorage.setItem('QC_DELETED_SAMPLES',JSON.stringify(this.deletedSamples));
+                        localStorage.setItem('QC_PERMANENTLY_DELETED_SAMPLES',JSON.stringify(this.permanentlyDeletedSamples));
                         localStorage.setItem('QC_DELETED_CATALOG',JSON.stringify(this.deletedCatalog));
                         return true;
                     } catch(error) { console.warn('[Supabase] State save failed; LocalStorage remains the local fallback.',error); return false; }
@@ -3260,6 +3293,7 @@
                 async restoreDeletedSample(item) {
                     const key=this.getSampleKey(item);
                     this.deletedSamples=this.deletedSamples.filter(x=>this.getSampleKey(x)!==key);
+                    this.permanentlyDeletedSamples = this.permanentlyDeletedSamples.filter(x => String(x.key || '') !== key);
                     const {deletedAt,deletedBy,...sample}=item;
                     this.samples.push(sample);
                     await this.persistAppState('restore-sample');
@@ -3269,6 +3303,17 @@
                     if(!window.confirm(this.lang==='ar'?'سيتم حذف العينة نهائياً ولا يمكن استعادتها. هل تريد المتابعة؟':'Permanently delete this sample?'))return;
                     const key=this.getSampleKey(item);
                     this.deletedSamples=this.deletedSamples.filter(x=>this.getSampleKey(x)!==key);
+                    if (key) {
+                        this.permanentlyDeletedSamples = this.permanentlyDeletedSamples.filter(x => String(x.key || '') !== key);
+                        this.permanentlyDeletedSamples.push({
+                            key,
+                            productName: item.productName || '',
+                            batchNumber: item.batchNumber || '',
+                            deletedAt: item.deletedAt || new Date().toISOString(),
+                            permanentlyDeletedAt: new Date().toISOString(),
+                            deletedBy: this.auth.username || this.auth.email || 'user'
+                        });
+                    }
                     await this.persistAppState('permanent-delete-sample');
                     this.showToast(this.lang==='ar'?'تم الحذف النهائي':'Permanently deleted');
                 },

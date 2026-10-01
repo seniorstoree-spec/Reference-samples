@@ -255,9 +255,9 @@
                 </button>
                 <button @click="navigateSection('deleted')" :class="sidebarButtonClass('deleted')" class="w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition-all text-start">
                     <span class="flex items-center gap-3"><span class="text-xl">🗑️</span><span>{{ lang === 'ar' ? 'المحذوفات' : 'Deleted Items' }}</span></span>
-                    <span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{{ formatNum(deletedTotalCount) }}</span>
+                    <span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{{ formatNum(deletedTotalCount()) }}</span>
                 </button>
-                <button @click="navigateSection('permissions')" :disabled="auth.role !== 'admin'" :class="sidebarButtonClass('permissions')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all text-start">
+                <button @click="navigateSection('catalog')" :class="sidebarButtonClass('catalog')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all text-start">
                     <span class="text-xl">📚</span><span>{{ lang === 'ar' ? 'دليل الأصناف والصلاحيات' : 'Catalog & Permissions' }}</span>
                 </button>
             </nav>
@@ -1807,20 +1807,40 @@
                 },
                 async refreshDeletedItems() {
                     try {
-                        const local = JSON.parse(localStorage.getItem('QC_DELETED_SAMPLES') || '[]');
-                        if (Array.isArray(local)) this.deletedSamples = this.mergeDeletedItems(local, this.deletedSamples);
+                        const localRaw = localStorage.getItem('QC_DELETED_SAMPLES') || '[]';
+                        let localItems = [];
+                        try {
+                            const parsed = JSON.parse(localRaw);
+                            if (Array.isArray(parsed)) localItems = parsed;
+                        } catch (_) {}
+
                         const { data, error } = await supabaseClient
                             .from('reference_app_state')
                             .select('deleted_samples')
                             .eq('id', 1)
                             .maybeSingle();
+
                         if (error) throw error;
-                        if (data && Array.isArray(data.deleted_samples)) {
-                            this.deletedSamples = this.mergeDeletedItems(data.deleted_samples, this.deletedSamples);
-                            localStorage.setItem('QC_DELETED_SAMPLES', JSON.stringify(this.deletedSamples));
-                        }
+
+                        const serverItems = Array.isArray(data?.deleted_samples) ? data.deleted_samples : [];
+                        // Server is the source of truth for records already deleted.
+                        // LocalStorage is only a fallback, never a reason to hide server records.
+                        const merged = this.mergeDeletedItems(serverItems, localItems);
+                        this.deletedSamples = merged;
+                        localStorage.setItem('QC_DELETED_SAMPLES', JSON.stringify(merged));
+
+                        console.log('[Deleted Items] Loaded:', merged.length);
+                        return merged;
                     } catch (e) {
                         console.warn('[Deleted Items] Refresh failed:', e);
+                        // If Supabase is temporarily unavailable, still show the local deleted archive.
+                        try {
+                            const parsed = JSON.parse(localStorage.getItem('QC_DELETED_SAMPLES') || '[]');
+                            if (Array.isArray(parsed)) {
+                                this.deletedSamples = this.mergeDeletedItems(parsed, this.deletedSamples);
+                            }
+                        } catch (_) {}
+                        return this.deletedSamples;
                     }
                 },
                 async createStateSnapshot(reason = 'automatic') {
@@ -1865,9 +1885,16 @@
                         const localSamples = Array.isArray(this.samples) ? this.samples : [];
 
                         if (data) {
-                            
-                            this.deletedSamples = this.mergeDeletedItems(data.deleted_samples, this.deletedSamples);
-                            this.deletedCatalog = this.mergeDeletedItems(data.deleted_catalog, this.deletedCatalog);
+                            // Load deleted records explicitly before filtering active records.
+                            // This guarantees the Deleted Items section is populated from Supabase after refresh/login.
+                            this.deletedSamples = this.mergeDeletedItems(
+                                Array.isArray(data.deleted_samples) ? data.deleted_samples : [],
+                                this.deletedSamples
+                            );
+                            this.deletedCatalog = this.mergeDeletedItems(
+                                Array.isArray(data.deleted_catalog) ? data.deleted_catalog : [],
+                                this.deletedCatalog
+                            );
                             localStorage.setItem('QC_DELETED_SAMPLES', JSON.stringify(this.deletedSamples));
                             localStorage.setItem('QC_DELETED_CATALOG', JSON.stringify(this.deletedCatalog));
                             const deletedSampleKeys = new Set(this.deletedSamples.map(x=>this.getSampleKey(x)).filter(Boolean));
@@ -2801,18 +2828,15 @@
                     this.persistAppState();
                     this.closeModal();
                 },
-                navigateSection(section) {
-                    if (section === 'permissions') {
-                        if (this.auth.role === 'admin') { this.appView = 'admin'; }
-                        else { this.showToast(this.lang === 'ar' ? 'هذا القسم متاح للمشرف فقط' : 'This section is available to administrators only', 'error'); }
-                        return;
-                    }
+                async navigateSection(section) {
+                    // Keep every sidebar item inside the main QC application.
+                    // The permissions/admin screen remains available through the existing developer button.
                     this.currentSection = section;
                     if (['active', 'archived', 'rejected', 'catalog'].includes(section)) {
                         this.currentTab = section;
                     }
                     if (section === 'deleted') {
-                        this.refreshDeletedItems();
+                        await this.refreshDeletedItems();
                     }
                     if (section === 'dashboard') {
                         this.activeKpiFilter = null;

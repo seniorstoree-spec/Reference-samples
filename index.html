@@ -35,6 +35,18 @@
         .sample-name-one-line {
             white-space: nowrap !important;
         }
+        .qc-sidebar-scroll {
+            scrollbar-width: thin;
+        }
+        @media (max-width: 1023px) {
+            .qc-sidebar-mobile {
+                position: relative !important;
+                width: 100% !important;
+                height: auto !important;
+                top: auto !important;
+                right: auto !important;
+            }
+        }
     </style>
     <script src="data/masterCatalog.js"></script>
 </head>
@@ -204,11 +216,65 @@
                 </div>
             </div>
         </header>
-        
 
+        <!-- Main Application Sidebar -->
+        <aside class="qc-sidebar-mobile fixed right-0 top-0 z-40 h-screen w-64 bg-white border-l border-gray-200 shadow-xl flex flex-col overflow-hidden">
+            <div class="p-5 bg-gradient-to-b from-blue-900 to-blue-800 text-white">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center text-2xl">🧪</div>
+                    <div>
+                        <div class="font-black text-lg">{{ lang === 'ar' ? 'نظام العينات المرجعية' : 'Reference Samples' }}</div>
+                        <div class="text-blue-100 text-xs mt-1">{{ lang === 'ar' ? 'نظام الجودة وسلامة الغذاء' : 'Quality & Food Safety' }}</div>
+                    </div>
+                </div>
+            </div>
+            <nav class="qc-sidebar-scroll flex-1 overflow-y-auto p-3 space-y-2">
+                <button @click="navigateSection('dashboard')" :class="sidebarButtonClass('dashboard')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all text-start">
+                    <span class="text-xl">📊</span><span>{{ lang === 'ar' ? 'لوحة التحكم' : 'Dashboard' }}</span>
+                </button>
+                <button @click="navigateSection('intake')" :class="sidebarButtonClass('intake')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all text-start">
+                    <span class="text-xl">➕</span><span>{{ t('newSampleIntake') }}</span>
+                </button>
+                <button @click="navigateSection('active')" :class="sidebarButtonClass('active')" class="w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition-all text-start">
+                    <span class="flex items-center gap-3"><span class="text-xl">🧪</span><span>{{ t('activeSamplesTab') }}</span></span>
+                    <span class="text-xs bg-blue-100 px-2 py-0.5 rounded-full">{{ formatNum(activeSamplesCount) }}</span>
+                </button>
+                <button @click="navigateSection('archived')" :class="sidebarButtonClass('archived')" class="w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition-all text-start">
+                    <span class="flex items-center gap-3"><span class="text-xl">🗂️</span><span>{{ t('archivedSamplesTab') }}</span></span>
+                    <span class="text-xs bg-gray-100 px-2 py-0.5 rounded-full">{{ formatNum(archivedSamplesCount) }}</span>
+                </button>
+                <button @click="navigateSection('rejected')" :class="sidebarButtonClass('rejected')" class="w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition-all text-start">
+                    <span class="flex items-center gap-3"><span class="text-xl">🚫</span><span>{{ t('rejectedSamplesTab') }}</span></span>
+                    <span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{{ formatNum(rejectedSamplesCount) }}</span>
+                </button>
+                <button @click="navigateSection('deleted')" :class="sidebarButtonClass('deleted')" class="w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition-all text-start">
+                    <span class="flex items-center gap-3"><span class="text-xl">🗑️</span><span>{{ lang === 'ar' ? 'المحذوفات' : 'Deleted Items' }}</span></span>
+                    <span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{{ formatNum(deletedTotalCount) }}</span>
+                </button>
+                <button @click="navigateSection('catalog')" :class="sidebarButtonClass('catalog')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all text-start">
+                    <span class="text-xl">📚</span><span>{{ t('masterCatalogTab') }}</span>
+                </button>
+            </nav>
+            <div class="p-3 border-t bg-gray-50">
+                <div v-if="auth.isAuthenticated" class="text-xs bg-blue-50 border border-blue-100 rounded-lg p-3">
+                    <div class="text-gray-500 font-bold mb-1">{{ lang === 'ar' ? 'المستخدم الحالي' : 'Current User' }}</div>
+                    <div class="text-blue-900 font-black truncate">{{ auth.username || auth.email }}</div>
+                </div>
+            </div>
+        </aside>
 
-        
-        
+        <div class="lg:pe-72 flex flex-col gap-8">
+        <div v-if="currentSection === 'dashboard'" class="flex flex-col gap-8">
+        <!-- Dashboard User Header -->
+        <div class="bg-gradient-to-r from-blue-900 to-blue-700 text-white rounded-xl shadow-lg p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <div class="text-blue-100 text-sm font-bold">{{ lang === 'ar' ? 'لوحة تحكم نظام العينات المرجعية' : 'Reference Samples Dashboard' }}</div>
+                <div class="text-2xl font-black mt-1">{{ lang === 'ar' ? 'مرحباً، ' : 'Welcome, ' }}{{ auth.username || auth.email || '-' }}</div>
+            </div>
+            <div class="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-sm font-bold">
+                {{ lang === 'ar' ? 'جاهز للتوسع بإضافة مؤشرات وتقارير مستقبلية' : 'Ready for future KPIs and reports' }}
+            </div>
+        </div>
         <!-- KPI Supervisor Dashboard -->
         <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div @click="toggleKpiFilter('dueToday')" 
@@ -303,9 +369,26 @@
                 </ul>
             </div>
         </section>
+        </div>
+
+        <!-- Future Dashboard Expansion Area -->
+        <div v-if="currentSection === 'dashboard'" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-white rounded-xl border border-dashed border-blue-200 p-5 shadow-sm">
+                <div class="font-black text-gray-800">📈 {{ lang === 'ar' ? 'مؤشرات مستقبلية' : 'Future KPIs' }}</div>
+                <p class="text-xs text-gray-500 mt-2">{{ lang === 'ar' ? 'مساحة جاهزة لإضافة مؤشرات أداء جديدة بدون التأثير على البيانات الحالية.' : 'Ready for additional KPIs without changing current data.' }}</p>
+            </div>
+            <div class="bg-white rounded-xl border border-dashed border-blue-200 p-5 shadow-sm">
+                <div class="font-black text-gray-800">🔔 {{ lang === 'ar' ? 'تنبيهات وتقارير' : 'Alerts & Reports' }}</div>
+                <p class="text-xs text-gray-500 mt-2">{{ lang === 'ar' ? 'يمكن إضافة تنبيهات وتقارير دورية هنا مستقبلاً.' : 'A dedicated area for future alerts and scheduled reports.' }}</p>
+            </div>
+            <div class="bg-white rounded-xl border border-dashed border-blue-200 p-5 shadow-sm">
+                <div class="font-black text-gray-800">📊 {{ lang === 'ar' ? 'تحليلات إضافية' : 'Advanced Analytics' }}</div>
+                <p class="text-xs text-gray-500 mt-2">{{ lang === 'ar' ? 'مهيأة لإضافة تحليلات واتجاهات ومقارنات جديدة لاحقاً.' : 'Prepared for additional trends and comparisons later.' }}</p>
+            </div>
+        </div>
 
         <!-- Intake Form -->
-        <section class="bg-white p-6 rounded-lg shadow-md border-t-4 border-blue-600">
+        <section v-if="currentSection === 'intake'" class="bg-white p-6 rounded-lg shadow-md border-t-4 border-blue-600">
             <h2 class="text-xl font-bold mb-6 text-gray-800">{{ t('newSampleIntake') }}</h2>
             <form @submit.prevent="addSample" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Product Name -->
@@ -412,37 +495,10 @@
             </form>
         </section>
 
-        <!-- Deleted Items Navigation -->
-        <div class="flex justify-end mb-4">
-            <button @click="currentTab = currentTab === 'deleted' ? 'active' : 'deleted'"
-                :class="currentTab === 'deleted' ? 'bg-red-600 text-white shadow-md' : 'bg-white text-red-700 border border-red-200 hover:bg-red-50'"
-                class="px-5 py-3 rounded-lg font-bold text-sm transition-colors flex items-center gap-2">
-                🗑️ {{ lang === 'ar' ? 'المحذوفات' : 'Deleted Items' }}
-                <span class="px-2 py-0.5 rounded-full text-xs" :class="currentTab === 'deleted' ? 'bg-white/20' : 'bg-red-50'">{{ formatNum(deletedTotalCount) }}</span>
-            </button>
-        </div>
-
         <!-- Data Registry with Filters -->
-        <section v-if="currentTab !== 'deleted'" class="bg-white rounded-lg shadow-md overflow-hidden border-t-4 border-gray-700">
+        <section v-if="['active','archived','rejected','catalog'].includes(currentSection)" class="bg-white rounded-lg shadow-md overflow-hidden border-t-4 border-gray-700">
             
-            <!-- Global TABS for Active vs Archived -->
-            <div class="flex border-b border-gray-200 bg-gray-50">
-                <button @click="currentTab = 'active'" :class="currentTab === 'active' ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'" class="w-1/4 py-4 px-1 text-center border-b-2 font-bold text-sm uppercase tracking-wider transition-colors">
-                    {{ t('activeSamplesTab') }} ({{ formatNum(activeSamplesCount) }})
-                </button>
-                <button @click="currentTab = 'archived'" :class="currentTab === 'archived' ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'" class="w-1/4 py-4 px-1 text-center border-b-2 font-bold text-sm uppercase tracking-wider transition-colors">
-                    {{ t('archivedSamplesTab') }} ({{ formatNum(archivedSamplesCount) }})
-                </button>
-                <button @click="currentTab = 'rejected'" :class="currentTab === 'rejected' ? 'border-red-600 text-red-600 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'" class="w-1/4 py-4 px-1 text-center border-b-2 font-bold text-sm uppercase tracking-wider transition-colors">
-                    {{ t('rejectedSamplesTab') }} ({{ formatNum(rejectedSamplesCount) }})
-                </button>
-                <button @click="currentTab = 'catalog'" :class="currentTab === 'catalog' ? 'border-purple-600 text-purple-600 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'" class="w-1/4 py-4 px-1 text-center border-b-2 font-bold text-sm uppercase tracking-wider transition-colors flex items-center justify-center gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                    {{ t('masterCatalogTab') }}
-                </button>
 
-            </div>
-            <div v-if="currentTab !== 'catalog'">
 
 
             <!-- Global Filters Bar -->
@@ -825,7 +881,7 @@
         </section>
 </section>
         <!-- Deleted Items -->
-        <section v-if="currentTab === 'deleted'" class="bg-white rounded-lg shadow-md overflow-hidden">
+        <section v-if="currentSection === 'deleted'" class="bg-white rounded-lg shadow-md overflow-hidden">
             <div class="p-6 border-b bg-red-50 flex justify-between items-center gap-4">
                 <div><h2 class="text-2xl font-black text-red-800">{{ lang === 'ar' ? 'المحذوفات' : 'Deleted Items' }}</h2>
                 <p class="text-sm text-red-700 mt-1">{{ lang === 'ar' ? 'العناصر المحذوفة لا تعود تلقائياً بعد التحديث. يمكنك استعادتها أو حذفها نهائياً.' : 'Deleted items stay deleted after refresh until restored or permanently removed.' }}</p></div>
@@ -842,7 +898,9 @@
 
 
         
-        <!-- Inspection Entry Modal -->
+        </div>
+
+                <!-- Inspection Entry Modal -->
         <div v-if="activeInspectionModal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
             <div class="bg-white rounded-lg shadow-xl w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]">
                 <!-- Header -->
@@ -1301,7 +1359,9 @@
                     deletedSamples: initialDeletedSamples,
                     deletedCatalog: initialDeletedCatalog,
                     
+                    currentSection: 'dashboard',
                     currentTab: 'active', // active or archived
+
                     activeKpiFilter: null,
                     archiveExplorer: { selectedYear: null, selectedMonth: null, selectedProduct: null },
                     rejectedArchiveExplorer: { selectedYear: null, selectedMonth: null, selectedProduct: null },
@@ -2711,6 +2771,24 @@
                     sample.lastInspectionDate = this.modalForm.testedDate || new Date().toISOString().split('T')[0];
                     this.persistAppState();
                     this.closeModal();
+                },
+                navigateSection(section) {
+                    this.currentSection = section;
+                    if (['active', 'archived', 'rejected', 'catalog'].includes(section)) {
+                        this.currentTab = section;
+                    }
+                    if (section === 'dashboard') {
+                        this.activeKpiFilter = null;
+                    }
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                },
+                sidebarButtonClass(section) {
+                    if (this.currentSection === section) {
+                        if (section === 'rejected' || section === 'deleted') return 'bg-red-600 text-white shadow-md';
+                        if (section === 'catalog') return 'bg-purple-600 text-white shadow-md';
+                        return 'bg-blue-600 text-white shadow-md';
+                    }
+                    return 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-100';
                 },
                 resetFilters() {
                     this.activeKpiFilter = null;

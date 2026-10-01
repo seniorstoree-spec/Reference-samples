@@ -2075,7 +2075,13 @@
                     const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pwd });
                     if (error || !data?.user) {
                         console.error('[Auth] Sign-in error:', error);
-                        this.auth.error = this.lang === 'ar' ? 'اسم المستخدم/البريد الإلكتروني أو كلمة المرور غير صحيحة' : 'Username/email or password is incorrect';
+                        if (error?.code === 'email_not_confirmed' || /email not confirmed/i.test(error?.message || '')) {
+                            this.auth.error = this.lang === 'ar'
+                                ? 'هذا الحساب غير مُفعّل بعد. بالنسبة للحساب العادي بدون بريد، تأكد من اسم المستخدم وكلمة المرور ثم حاول مرة أخرى.'
+                                : 'This account is not activated yet. For a username account, verify the username and password and try again.';
+                        } else {
+                            this.auth.error = this.lang === 'ar' ? 'اسم المستخدم/البريد الإلكتروني أو كلمة المرور غير صحيحة' : 'Username/email or password is incorrect';
+                        }
                         return;
                     }
 
@@ -2096,25 +2102,75 @@
                     this.loginForm.username = '';
                 },
                 async addUser() {
-                    const uname = this.adminForm.newUsername.trim();
+                    const uname = this.adminForm.newUsername.trim().toLowerCase();
                     const pwd = this.adminForm.newPassword.trim();
                     if (!uname || !pwd) return;
-                    if (this.users.some(u => u.username && u.username.toLowerCase() === uname.toLowerCase())) {
+                    if (!/^[a-z0-9._-]{3,30}$/.test(uname)) {
+                        this.showToast(this.lang === 'ar' ? 'اسم المستخدم يجب أن يكون 3-30 حرفًا ويحتوي على حروف إنجليزية أو أرقام أو . _ - فقط' : 'Username must be 3-30 characters and use only letters, numbers, dot, underscore or hyphen', 'error');
+                        return;
+                    }
+                    if (pwd.length < 6) {
+                        this.showToast(this.lang === 'ar' ? 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' : 'Password must be at least 6 characters', 'error');
+                        return;
+                    }
+                    if (this.users.some(u => u.username && u.username.toLowerCase() === uname)) {
                         this.showToast(this.lang === 'ar' ? 'اسم المستخدم موجود بالفعل' : 'Username already exists', 'error');
                         return;
                     }
-                    const hashed = await this.hashPassword(pwd);
-                    this.users.push({ 
-                        username: uname, 
-                        password: pwd, 
-                        passwordHash: hashed, 
-                        role: 'user', 
-                        createdAt: new Date().toISOString() 
-                    });
-                    localStorage.setItem('QC_USERS', JSON.stringify(this.users));
-                    this.adminForm.newUsername = '';
-                    this.adminForm.newPassword = '';
-                    this.showToast(this.lang === 'ar' ? 'تم إضافة المستخدم بنجاح' : 'User added successfully');
+
+                    // IMPORTANT: Admin-created users must be real Supabase Auth users.
+                    // The old implementation only wrote to localStorage, while login uses Supabase Auth.
+                    // That mismatch made newly-created normal accounts impossible to activate/login.
+                    try {
+                        const email = this.buildLocalAuthEmail(uname);
+                        const { data, error } = await supabaseClient.auth.signUp({
+                            email,
+                            password: pwd,
+                            options: {
+                                data: {
+                                    username: uname,
+                                    display_name: uname,
+                                    account_type: 'username',
+                                    reference_role: 'user'
+                                }
+                            }
+                        });
+
+                        if (error) {
+                            console.error('[Admin] Supabase user creation failed:', error);
+                            const duplicate = /already registered|already exists|user already/i.test(error.message || '');
+                            this.showToast(
+                                duplicate
+                                    ? (this.lang === 'ar' ? 'اسم المستخدم موجود بالفعل في النظام' : 'Username already exists in the system')
+                                    : (error.message || (this.lang === 'ar' ? 'تعذر إنشاء المستخدم' : 'Could not create user')),
+                                'error'
+                            );
+                            return;
+                        }
+
+                        const createdUser = data?.user;
+                        if (!createdUser) {
+                            this.showToast(this.lang === 'ar' ? 'تعذر إنشاء الحساب. حاول مرة أخرى.' : 'The account could not be created. Please try again.', 'error');
+                            return;
+                        }
+
+                        const hashed = await this.hashPassword(pwd);
+                        this.users.push({
+                            username: uname,
+                            password: pwd,
+                            passwordHash: hashed,
+                            role: 'user',
+                            authUserId: createdUser.id,
+                            createdAt: new Date().toISOString()
+                        });
+                        localStorage.setItem('QC_USERS', JSON.stringify(this.users));
+                        this.adminForm.newUsername = '';
+                        this.adminForm.newPassword = '';
+                        this.showToast(this.lang === 'ar' ? 'تم إنشاء الحساب وتفعيله بنجاح' : 'User account created and activated successfully');
+                    } catch (e) {
+                        console.error('[Admin] User creation exception:', e);
+                        this.showToast(this.lang === 'ar' ? 'حدث خطأ أثناء إنشاء الحساب' : 'An error occurred while creating the account', 'error');
+                    }
                 },
                 deleteUser(index) {
                     if (confirm(this.lang === 'ar' ? 'هل أنت تأكد من حذف هذا المستخدم؟' : 'Are you sure you want to delete this user?')) {

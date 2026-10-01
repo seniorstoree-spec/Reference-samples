@@ -81,10 +81,10 @@
                 </div>
 
                 <div class="w-full bg-gray-100 p-1 rounded-xl flex gap-1 mb-1">
-                    <button type="button" @click="setAuthMode('email')" :class="authMode === 'email' ? 'bg-white shadow text-blue-700' : 'text-gray-500'" class="flex-1 py-2.5 rounded-lg font-bold text-sm transition">
+                    <button type="button" @click.prevent="selectAuthMode('email')" :aria-pressed="authMode === 'email'" :class="authMode === 'email' ? 'bg-white shadow text-blue-700 ring-2 ring-blue-200' : 'text-gray-500'" class="flex-1 py-2.5 rounded-lg font-bold text-sm transition">
                         {{ lang === 'ar' ? 'بالبريد الإلكتروني' : 'Email account' }}
                     </button>
-                    <button type="button" @click="setAuthMode('username')" :class="authMode === 'username' ? 'bg-white shadow text-blue-700' : 'text-gray-500'" class="flex-1 py-2.5 rounded-lg font-bold text-sm transition">
+                    <button type="button" @click.prevent="selectAuthMode('username')" :aria-pressed="authMode === 'username'" :class="authMode === 'username' ? 'bg-white shadow text-blue-700 ring-2 ring-blue-200' : 'text-gray-500'" class="flex-1 py-2.5 rounded-lg font-bold text-sm transition">
                         {{ lang === 'ar' ? 'حساب عادي بدون إيميل' : 'Username account' }}
                     </button>
                 </div>
@@ -1993,10 +1993,25 @@
                     } catch(error) { console.warn('[Supabase] State save failed; LocalStorage remains the local fallback.',error); return false; }
                 },
 
-                setAuthMode(mode) {
-                    this.authMode = mode === 'username' ? 'username' : 'email';
+                selectAuthMode(mode) {
+                    const nextMode = mode === 'username' ? 'username' : 'email';
+                    this.authMode = nextMode;
                     this.auth.error = '';
                     this.loginForm.password = '';
+                    if (nextMode === 'username') {
+                        this.loginForm.email = '';
+                    } else {
+                        this.loginForm.username = '';
+                    }
+                    this.$nextTick(() => {
+                        const selector = nextMode === 'username'
+                            ? 'input[autocomplete="username"]'
+                            : 'input[autocomplete="email"]';
+                        document.querySelector(selector)?.focus();
+                    });
+                },
+                setAuthMode(mode) {
+                    this.selectAuthMode(mode);
                 },
                 toggleSignupMode() {
                     this.isSignupMode = !this.isSignupMode;
@@ -2156,73 +2171,49 @@
                         return;
                     }
 
-                    // IMPORTANT: Admin-created users must be real Supabase Auth users.
-                    // The old implementation only wrote to localStorage, while login uses Supabase Auth.
-                    // That mismatch made newly-created normal accounts impossible to activate/login.
+                    // Create username-only accounts through a protected Edge Function.
+                    // This confirms the Auth user server-side, so no unreachable fake-email activation is required.
                     try {
-                        // Preserve the administrator session because Supabase client-side signUp
-                        // may return a session when email confirmation is disabled.
-                        const { data: adminSessionData } = await supabaseClient.auth.getSession();
-                        const adminSession = adminSessionData?.session || null;
+                        const { data: sessionData } = await supabaseClient.auth.getSession();
+                        const accessToken = sessionData?.session?.access_token;
+                        if (!accessToken) {
+                            this.showToast(this.lang === 'ar' ? 'جلسة المدير غير صالحة. سجّل الدخول مرة أخرى.' : 'Administrator session is invalid. Please sign in again.', 'error');
+                            return;
+                        }
 
-                        const email = this.buildLocalAuthEmail(uname);
-                        const { data, error } = await supabaseClient.auth.signUp({
-                            email,
-                            password: pwd,
-                            options: {
-                                data: {
-                                    username: uname,
-                                    display_name: uname,
-                                    account_type: 'username',
-                                    reference_role: 'user'
-                                }
-                            }
+                        const response = await fetch(SUPABASE_URL + '/functions/v1/create-username-user', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': 'Bearer ' + accessToken,
+                                'apikey': SUPABASE_PUBLISHABLE_KEY
+                            },
+                            body: JSON.stringify({ username: uname, password: pwd })
                         });
-
-                        // Never leave the administrator logged in as the newly-created user.
-                        if (adminSession?.access_token && adminSession?.refresh_token) {
-                            try {
-                                await supabaseClient.auth.setSession({
-                                    access_token: adminSession.access_token,
-                                    refresh_token: adminSession.refresh_token
-                                });
-                                await this.applySupabaseUser(adminSession.user);
-                                this.appView = 'admin';
-                            } catch (restoreError) {
-                                console.warn('[Admin] Could not restore administrator session:', restoreError);
-                            }
-                        }
-
-                        if (error) {
-                            console.error('[Admin] Supabase user creation failed:', error);
-                            const duplicate = /already registered|already exists|user already/i.test(error.message || '');
-                            this.showToast(
-                                duplicate
-                                    ? (this.lang === 'ar' ? 'اسم المستخدم موجود بالفعل في النظام' : 'Username already exists in the system')
-                                    : (error.message || (this.lang === 'ar' ? 'تعذر إنشاء المستخدم' : 'Could not create user')),
-                                'error'
-                            );
+                        const result = await response.json().catch(() => ({}));
+                        if (!response.ok) {
+                            this.showToast(result.error || (this.lang === 'ar' ? 'تعذر إنشاء الحساب.' : 'Could not create the account.'), 'error');
                             return;
                         }
 
-                        const createdUser = data?.user;
-                        if (!createdUser) {
-                            this.showToast(this.lang === 'ar' ? 'تعذر إنشاء الحساب. حاول مرة أخرى.' : 'The account could not be created. Please try again.', 'error');
-                            return;
-                        }
-
+                        const createdUser = result.user;
                         const hashed = await this.hashPassword(pwd);
                         this.users.push({
                             username: uname,
                             password: pwd,
                             passwordHash: hashed,
                             role: 'user',
-                            authUserId: createdUser.id,
+                            authUserId: createdUser?.id || '',
                             createdAt: new Date().toISOString()
                         });
                         localStorage.setItem('QC_USERS', JSON.stringify(this.users));
                         this.adminForm.newUsername = '';
                         this.adminForm.newPassword = '';
+                        this.showToast(this.lang === 'ar' ? 'تم إنشاء الحساب وتفعيله بنجاح ويمكن تسجيل الدخول به الآن.' : 'Account created and activated successfully. It can be used to sign in now.');
+                    } catch (e) {
+                        console.error('[Admin] Username account creation failed:', e);
+                        this.showToast(this.lang === 'ar' ? 'حدث خطأ أثناء إنشاء الحساب.' : 'An error occurred while creating the account.', 'error');
+                    }
                         this.showToast(this.lang === 'ar' ? 'تم إنشاء الحساب وتفعيله بنجاح' : 'User account created and activated successfully');
                     } catch (e) {
                         console.error('[Admin] User creation exception:', e);

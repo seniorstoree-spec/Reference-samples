@@ -19,7 +19,13 @@
             })
             : null;
     </script>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>
+    <script>
+        // CDN fallback: Vue is the only mandatory runtime dependency for this static SPA.
+        if (!window.Vue) {
+            document.write('<script src="https://unpkg.com/vue@3/dist/vue.global.js"><\\/script>');
+        }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -1420,23 +1426,27 @@
                 this.auth.isAuthenticated = true;
                 this.auth.role = 'user';
                 this.auth.username = 'مستخدم مؤقت';
-                try {
-                    const { data: { session } } = await supabaseClient.auth.getSession();
-                    if (session?.user) {
-                        await this.applySupabaseUser(session.user);
-                        this.appView = 'qc';
-                    }
-                    supabaseClient.auth.onAuthStateChange(async (event, session) => {
+                // Supabase is optional for the UI boot. Never dereference a missing CDN client.
+                if (supabaseClient) {
+                    try {
+                        const { data: { session } } = await supabaseClient.auth.getSession();
                         if (session?.user) {
                             await this.applySupabaseUser(session.user);
-                        } else if (event === 'SIGNED_OUT') {
-                            // Authentication is temporarily bypassed; keep the application open.
-                            this.auth = { isAuthenticated: true, role: 'user', username: 'مستخدم مؤقت', email: null, error: '', loading: false };
                             this.appView = 'qc';
                         }
-                    });
-                } catch (e) {
-                    console.error('[Auth] Session initialization failed:', e);
+                        supabaseClient.auth.onAuthStateChange(async (event, session) => {
+                            if (session?.user) {
+                                await this.applySupabaseUser(session.user);
+                            } else if (event === 'SIGNED_OUT') {
+                                this.auth = { isAuthenticated: true, role: 'user', username: 'مستخدم مؤقت', email: null, error: '', loading: false };
+                                this.appView = 'qc';
+                            }
+                        });
+                    } catch (e) {
+                        console.error('[Auth] Session initialization failed:', e);
+                    }
+                } else {
+                    console.warn('[Auth] Supabase CDN unavailable; starting in local UI mode.');
                 }
                 // Migration: Sync all loaded samples with master catalog rules
                 let migrated = false;

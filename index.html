@@ -909,9 +909,35 @@
             <div class="p-6">
                 <h3 class="font-black text-lg mb-3">{{ lang === 'ar' ? 'العينات المحذوفة' : 'Deleted Samples' }}</h3>
                 <div v-if="deletedSamples.length===0" class="p-6 text-center text-gray-400 border rounded-lg mb-8">{{ lang === 'ar' ? 'لا توجد عينات محذوفة.' : 'No deleted samples.' }}</div>
-                <div v-else class="overflow-x-auto border rounded-lg mb-8"><table class="w-full text-sm"><thead class="bg-gray-50"><tr><th class="p-3 text-start">المنتج</th><th class="p-3 text-center">التشغيلة</th><th class="p-3 text-center">تاريخ الحذف</th><th class="p-3 text-center">الإجراءات</th></tr></thead><tbody class="divide-y">
-                    <tr v-for="item in deletedSamples" :key="'ds-'+getSampleKey(item)"><td class="p-3 font-bold"><span class="sample-name-one-line">{{ t(item.productName) }}</span></td><td class="p-3 text-center font-mono">{{ item.batchNumber || '-' }}</td><td class="p-3 text-center">{{ formatDate(item.deletedAt) }}</td><td class="p-3 text-center"><button @click="restoreDeletedSample(item)" class="bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 rounded font-bold text-xs">استعادة</button> <button @click="permanentlyDeleteSample(item)" class="bg-red-50 text-red-700 border border-red-200 px-3 py-1.5 rounded font-bold text-xs">حذف نهائي</button></td></tr>
-                </tbody></table></div>
+                <div v-else class="w-full max-w-5xl mx-auto border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-white">
+                    <div class="overflow-x-auto">
+                        <table class="w-full table-fixed text-sm">
+                            <thead class="bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                    <th class="p-4 text-start font-bold w-[34%]">المنتج</th>
+                                    <th class="p-4 text-center font-bold w-[18%]">التشغيلة</th>
+                                    <th class="p-4 text-center font-bold w-[20%]">تاريخ الحذف</th>
+                                    <th class="p-4 text-center font-bold w-[28%]">الإجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr v-for="item in deletedSamples" :key="'ds-'+getSampleKey(item)" class="hover:bg-gray-50 transition-colors">
+                                    <td class="p-4 font-bold text-gray-800 align-middle">
+                                        <span class="sample-name-one-line block truncate" :title="t(item.productName)">{{ t(item.productName) }}</span>
+                                    </td>
+                                    <td class="p-4 text-center font-mono text-gray-700 align-middle" dir="ltr">{{ item.batchNumber || '-' }}</td>
+                                    <td class="p-4 text-center text-gray-700 align-middle" dir="ltr">{{ formatDate(item.deletedAt) }}</td>
+                                    <td class="p-4 text-center align-middle">
+                                        <div class="flex flex-wrap items-center justify-center gap-2">
+                                            <button @click="restoreDeletedSample(item)" class="bg-green-50 text-green-700 border border-green-200 px-4 py-2 rounded-lg font-bold text-xs hover:bg-green-100 transition-colors whitespace-nowrap">استعادة</button>
+                                            <button @click="permanentlyDeleteSample(item)" class="bg-red-50 text-red-700 border border-red-200 px-4 py-2 rounded-lg font-bold text-xs hover:bg-red-100 transition-colors whitespace-nowrap">حذف نهائي</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </section>
 

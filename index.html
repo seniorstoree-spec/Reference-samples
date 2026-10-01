@@ -744,7 +744,7 @@
                                                             <div class="font-bold text-gray-700 px-2">{{ t(insp.stage) }}</div>
                                                         </td>
                                                         <td class="p-2">
-                                                            <input type="date" v-model="insp.scheduledDate" placeholder="dd/mm/yyyy" class="w-full bg-white border border-transparent hover:border-gray-300 focus:border-blue-500 rounded px-2 py-1.5 transition-colors text-gray-700 font-mono text-sm" dir="ltr">
+                                                            <input type="date" v-model="insp.scheduledDate" @change="saveInspectionSchedule(sample, insp)" placeholder="dd/mm/yyyy" class="w-full bg-white border border-transparent hover:border-gray-300 focus:border-blue-500 rounded px-2 py-1.5 transition-colors text-gray-700 font-mono text-sm" dir="ltr">
                                                         </td>
                                                         <td class="p-2">
                                                             <span :class="getInspectionStatusBadge(getInspectionStatus(insp))" class="px-2.5 py-1 rounded text-xs font-bold whitespace-nowrap shadow-sm border">
@@ -3327,7 +3327,13 @@
                     return this.formatDate(lastDate);
                 },
                 saveSampleNotes(sample) {
-                    this.persistAppState();
+                    sample.updatedAt = new Date().toISOString();
+                    this.persistAppState('sample-notes-update');
+                },
+                async saveInspectionSchedule(sample, insp) {
+                    if (!sample || !insp) return;
+                    sample.updatedAt = new Date().toISOString();
+                    await this.persistAppState('inspection-schedule-update');
                 },
                 async deleteSample(sample) {
                     if(!window.confirm(this.lang==='ar' ? `هل تريد نقل العينة (رقم التشغيلة: ${sample.batchNumber}) إلى المحذوفات؟` : `Move batch ${sample.batchNumber} to Deleted Items?`)) return;
@@ -3396,7 +3402,7 @@
                         reader.readAsDataURL(file);
                     }
                 },
-                saveModal() {
+                async saveModal() {
                     if (!this.isModalValid) return;
                     const insp = this.activeInspectionModal.inspection;
                     const sample = this.activeInspectionModal.sample;
@@ -3422,7 +3428,10 @@
                         sample.statusOverride = null; sample.terminalTimestamp = null;
                     }
                     sample.lastInspectionDate = this.modalForm.testedDate || new Date().toISOString().split('T')[0];
-                    this.persistAppState();
+                    // Mark the sample as newer than the server copy so the edited inspection
+                    // cannot be overwritten by the older server record during synchronization.
+                    sample.updatedAt = new Date().toISOString();
+                    await this.persistAppState('inspection-update');
                     this.closeModal();
                 },
                 async navigateSection(section) {

@@ -2037,11 +2037,40 @@
                         if (error) throw error;
 
                         const serverItems = Array.isArray(data?.deleted_samples) ? data.deleted_samples : [];
-                        // Server is the source of truth for records already deleted.
-                        // LocalStorage is only a fallback, never a reason to hide server records.
-                        const merged = this.mergeDeletedItems(serverItems, localItems);
+
+                        const { data: permanentData, error: permanentError } = await supabaseClient
+                            .from('reference_app_state')
+                            .select('permanently_deleted_samples')
+                            .eq('id', 1)
+                            .maybeSingle();
+
+                        if (permanentError) throw permanentError;
+
+                        const serverPermanent = Array.isArray(permanentData?.permanently_deleted_samples)
+                            ? permanentData.permanently_deleted_samples
+                            : [];
+                        const localPermanent = Array.isArray(this.permanentlyDeletedSamples)
+                            ? this.permanentlyDeletedSamples
+                            : [];
+
+                        const permanentByKey = new Map();
+                        [...serverPermanent, ...localPermanent].forEach(item => {
+                            const key = item && item.key ? String(item.key) : '';
+                            if (key) permanentByKey.set(key, item);
+                        });
+
+                        this.permanentlyDeletedSamples = Array.from(permanentByKey.values());
+                        const permanentKeys = new Set(
+                            this.permanentlyDeletedSamples.map(x => String(x.key || '')).filter(Boolean)
+                        );
+
+                        // A permanent tombstone always wins over stale LocalStorage data.
+                        const merged = this.mergeDeletedItems(serverItems, localItems)
+                            .filter(item => !permanentKeys.has(this.getSampleKey(item)));
+
                         this.deletedSamples = merged;
                         localStorage.setItem('QC_DELETED_SAMPLES', JSON.stringify(merged));
+                        localStorage.setItem('QC_PERMANENTLY_DELETED_SAMPLES', JSON.stringify(this.permanentlyDeletedSamples));
 
                         console.log('[Deleted Items] Loaded:', merged.length);
                         return merged;
@@ -2090,7 +2119,7 @@
 
                         const { data, error } = await supabaseClient
                             .from('reference_app_state')
-                            .select('catalog,samples,deleted_samples,deleted_catalog,app_data_version')
+                            .select('catalog,samples,deleted_samples,deleted_catalog,permanently_deleted_samples,app_data_version')
                             .eq('id', 1)
                             .maybeSingle();
 
@@ -2102,14 +2131,6 @@
                         if (data) {
                             // Load deleted records explicitly before filtering active records.
                             // This guarantees the Deleted Items section is populated from Supabase after refresh/login.
-                            this.deletedSamples = this.mergeDeletedItems(
-                                Array.isArray(data.deleted_samples) ? data.deleted_samples : [],
-                                this.deletedSamples
-                            );
-                            this.deletedCatalog = this.mergeDeletedItems(
-                                Array.isArray(data.deleted_catalog) ? data.deleted_catalog : [],
-                                this.deletedCatalog
-                            );
                             const serverPermanent = Array.isArray(data.permanently_deleted_samples) ? data.permanently_deleted_samples : [];
                             const localPermanent = Array.isArray(this.permanentlyDeletedSamples) ? this.permanentlyDeletedSamples : [];
                             const permanentByKey = new Map();
@@ -2118,6 +2139,18 @@
                                 if (key) permanentByKey.set(key, item);
                             });
                             this.permanentlyDeletedSamples = Array.from(permanentByKey.values());
+                            const permanentKeys = new Set(this.permanentlyDeletedSamples.map(x => String(x.key || '')).filter(Boolean));
+
+                            this.deletedSamples = this.mergeDeletedItems(
+                                Array.isArray(data.deleted_samples) ? data.deleted_samples : [],
+                                this.deletedSamples
+                            ).filter(item => !permanentKeys.has(this.getSampleKey(item)));
+
+                            this.deletedCatalog = this.mergeDeletedItems(
+                                Array.isArray(data.deleted_catalog) ? data.deleted_catalog : [],
+                                this.deletedCatalog
+                            );
+
                             localStorage.setItem('QC_PERMANENTLY_DELETED_SAMPLES', JSON.stringify(this.permanentlyDeletedSamples));
                             localStorage.setItem('QC_DELETED_SAMPLES', JSON.stringify(this.deletedSamples));
                             localStorage.setItem('QC_DELETED_CATALOG', JSON.stringify(this.deletedCatalog));
@@ -3302,6 +3335,7 @@
                 async permanentlyDeleteSample(item) {
                     if(!window.confirm(this.lang==='ar'?'سيتم حذف العينة نهائياً ولا يمكن استعادتها. هل تريد المتابعة؟':'Permanently delete this sample?'))return;
                     const key=this.getSampleKey(item);
+                    this.samples = this.samples.filter(x => this.getSampleKey(x) !== key);
                     this.deletedSamples=this.deletedSamples.filter(x=>this.getSampleKey(x)!==key);
                     if (key) {
                         this.permanentlyDeletedSamples = this.permanentlyDeletedSamples.filter(x => String(x.key || '') !== key);

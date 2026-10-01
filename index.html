@@ -2214,11 +2214,6 @@
                         console.error('[Admin] Username account creation failed:', e);
                         this.showToast(this.lang === 'ar' ? 'حدث خطأ أثناء إنشاء الحساب.' : 'An error occurred while creating the account.', 'error');
                     }
-                        this.showToast(this.lang === 'ar' ? 'تم إنشاء الحساب وتفعيله بنجاح' : 'User account created and activated successfully');
-                    } catch (e) {
-                        console.error('[Admin] User creation exception:', e);
-                        this.showToast(this.lang === 'ar' ? 'حدث خطأ أثناء إنشاء الحساب' : 'An error occurred while creating the account', 'error');
-                    }
                 },
                 deleteUser(index) {
                     if (confirm(this.lang === 'ar' ? 'هل أنت تأكد من حذف هذا المستخدم؟' : 'Are you sure you want to delete this user?')) {

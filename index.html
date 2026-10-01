@@ -1459,6 +1459,11 @@
                 });
             },
             watch: {
+                currentSection(newSection) {
+                    if (newSection === 'dashboard') {
+                        this.$nextTick(() => this.updateCharts());
+                    }
+                },
                 productCatalog: {
                     deep: true,
                     handler(newVal) {

@@ -2083,13 +2083,39 @@
                         }
 
                         if (this.isSignupMode) {
-                            // Username-only accounts are created by the administrator through
-                            // the protected Edge Function. Do not create unconfirmed fake-email
-                            // accounts from the public login screen.
                             if (resolvedAuthMode === 'username') {
-                                this.auth.error = this.lang === 'ar'
-                                    ? 'الحسابات العادية بدون إيميل يتم إنشاؤها من لوحة المطور ثم يتم الدخول باسم المستخدم.'
-                                    : 'Username-only accounts are created from the developer panel, then you can sign in with the username.';
+                                // Public username registration: use the same deterministic internal
+                                // email used by username login. No real email address is requested.
+                                const { data, error } = await supabaseClient.auth.signUp({
+                                    email,
+                                    password: pwd,
+                                    options: {
+                                        data: {
+                                            username: displayName,
+                                            display_name: displayName,
+                                            account_type: 'username',
+                                            reference_role: 'user'
+                                        }
+                                    }
+                                });
+                                if (error) {
+                                    console.error('[Auth] Username signup error:', error);
+                                    this.auth.error = /already registered|already exists/i.test(error.message || '')
+                                        ? (this.lang === 'ar' ? 'اسم المستخدم موجود بالفعل.' : 'Username already exists.')
+                                        : (error.message || (this.lang === 'ar' ? 'تعذر إنشاء الحساب.' : 'Could not create account.'));
+                                    return;
+                                }
+                                this.loginForm.password = '';
+                                this.isSignupMode = false;
+                                if (data.session?.user) {
+                                    await this.applySupabaseUser(data.session.user);
+                                    this.appView = 'qc';
+                                    await this.initializeSupabaseSync();
+                                } else {
+                                    this.auth.error = this.lang === 'ar'
+                                        ? 'تم إنشاء الحساب لكنه يحتاج تفعيل البريد الداخلي من إعدادات Supabase. لا يمكن للحسابات بدون إيميل إتمام هذه الخطوة؛ لذلك يجب تعطيل تأكيد البريد لهذا النظام.'
+                                        : 'The account was created but requires email confirmation. Username-only accounts cannot complete that step; email confirmation must be disabled for this system.';
+                                }
                                 return;
                             }
 

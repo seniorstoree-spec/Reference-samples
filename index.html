@@ -15,7 +15,7 @@
         // Supabase is required for authentication, while the UI can still render if the backend is temporarily unavailable.
         const supabaseClient = window.supabase?.createClient
             ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-                auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+                auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
             })
             : null;
     </script>
@@ -1558,48 +1558,76 @@
             
 
             async mounted() {
-                // A restored/stale Supabase session must never open password recovery.
-                // Only an explicit recovery callback in the current URL may do that.
-                const recoveryUrl = (() => {
+                // Auth URL processing is deliberately manual. Supabase's automatic URL
+                // detection is disabled so a stale/replayed recovery fragment can never
+                // open the password-reset screen by itself.
+                const recoveryParams = (() => {
                     try {
                         const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
                         const query = new URLSearchParams(window.location.search);
                         const type = (hash.get('type') || query.get('type') || '').toLowerCase();
-                        const hasRecoveryToken = Boolean(hash.get('access_token') || hash.get('refresh_token') || hash.get('code') || query.get('code'));
-                        return type === 'recovery' || (hasRecoveryToken && /recovery/i.test(window.location.href));
-                    } catch (_) { return false; }
+                        return {
+                            type,
+                            access_token: hash.get('access_token') || '',
+                            refresh_token: hash.get('refresh_token') || '',
+                            code: query.get('code') || ''
+                        };
+                    } catch (_) {
+                        return { type: '', access_token: '', refresh_token: '', code: '' };
+                    }
                 })();
-                // Authentication is required before entering the application.
-                // A persisted Supabase session may restore the user automatically.
+                const isExplicitRecoveryUrl = recoveryParams.type === 'recovery' &&
+                    Boolean(recoveryParams.access_token && recoveryParams.refresh_token);
+
                 this.appView = 'login';
                 this.auth = { isAuthenticated: false, role: null, username: '', email: null, error: '', loading: false };
+                this.showPasswordRecoveryModal = false;
 
                 if (supabaseClient) {
                     try {
-                        const { data: { session } } = await supabaseClient.auth.getSession();
-                        if (session?.user && !recoveryUrl) {
-                            await this.applySupabaseUser(session.user);
-                            this.appView = 'qc';
-                        }
-                        supabaseClient.auth.onAuthStateChange(async (event, session) => {
-                            if (event === 'PASSWORD_RECOVERY' && recoveryUrl) {
-                                if (session?.user) {
-                                    await this.applySupabaseUser(session.user);
-                                }
+                        const authListener = supabaseClient.auth.onAuthStateChange(async (event, session) => {
+                            if (event === 'PASSWORD_RECOVERY') {
+                                // PASSWORD_RECOVERY is accepted only while handling an explicit
+                                // recovery URL. It can never trigger the modal on its own.
+                                if (!isExplicitRecoveryUrl) return;
+                                if (session?.user) await this.applySupabaseUser(session.user);
                                 this.appView = 'login';
                                 this.showPasswordRecoveryModal = true;
                                 this.recoveryPasswordForm = { password: '', confirmPassword: '', loading: false, error: '' };
                                 this.showRecoveryPassword = false;
                                 return;
                             }
-                            if (session?.user) {
+                            if (session?.user && !isExplicitRecoveryUrl) {
                                 await this.applySupabaseUser(session.user);
                                 this.appView = 'qc';
                             } else if (event === 'SIGNED_OUT') {
                                 this.auth = { isAuthenticated: false, role: null, username: '', email: null, error: '', loading: false };
                                 this.appView = 'login';
+                                this.showPasswordRecoveryModal = false;
                             }
                         });
+
+                        if (isExplicitRecoveryUrl) {
+                            const { error } = await supabaseClient.auth.setSession({
+                                access_token: recoveryParams.access_token,
+                                refresh_token: recoveryParams.refresh_token
+                            });
+                            if (error) throw error;
+                            this.appView = 'login';
+                            this.showPasswordRecoveryModal = true;
+                            this.recoveryPasswordForm = { password: '', confirmPassword: '', loading: false, error: '' };
+                            this.showRecoveryPassword = false;
+                            // Remove the recovery fragment immediately. The live session remains
+                            // available to updateUser(), but refresh cannot re-trigger recovery.
+                            try { window.history.replaceState({}, document.title, window.location.pathname); } catch (_) {}
+                        } else {
+                            const { data: { session } } = await supabaseClient.auth.getSession();
+                            if (session?.user) {
+                                await this.applySupabaseUser(session.user);
+                                this.appView = 'qc';
+                            }
+                        }
+                        this._authListener = authListener;
                     } catch (e) {
                         console.error('[Auth] Session initialization failed:', e);
                         this.auth.error = this.lang === 'ar'
@@ -1608,72 +1636,10 @@
                     }
                 } else {
                     this.auth.error = this.lang === 'ar'
-                        ? 'خدمة تسجيل الدخول غير متاحة حاليًا. أعد تحميل الصفحة وحاول مرة أخرى.'
+                        ? 'خدمة تسجيل الدخول غير متاحة حاليًا. أعد تحميل الصفحة وحاول تسجيل الدخول مرة أخرى.'
                         : 'The login service is currently unavailable. Reload the page and try again.';
                     console.error('[Auth] Supabase client is unavailable.');
                 }
-                // Migration: Sync all loaded samples with master catalog rules
-                let migrated = false;
-                this.samples.forEach(sample => {
-                    const catalogItem = this.productCatalog.find(c => c.name === sample.productName);
-                    if (catalogItem) {
-                        const expectedExp = new Date(sample.productionDate);
-                        expectedExp.setMonth(expectedExp.getMonth() + parseInt(catalogItem.shelfLifeMonths, 10));
-                        const expectedExpStr = expectedExp.toISOString().split('T')[0];
-                        if (sample.expirationDate !== expectedExpStr) {
-                            sample.expirationDate = expectedExpStr;
-                            migrated = true;
-                        }
-                    }
-                });
-                
-                // Migration: Generate milestones for existing samples that have an empty schedule
-                this.samples.forEach(sample => {
-                    if (!sample.inspections || sample.inspections.length === 0) {
-                        const totalDays = this.calculateTotalShelfLife(sample.productionDate, sample.expirationDate);
-                        sample.inspections = [
-                            { id: Date.now() + Math.random(), stage: 'Baseline (0%)', scheduledDate: this.calculateMilestoneDate(sample.productionDate, totalDays, 0), testedDate: '', inspectorName: '', result: '', issueCategory: '', defectTags: [], notes: '', rejectionReason: '', photoDataUrl: null },
-                            { id: Date.now() + Math.random(), stage: 'Quarter-Life (25%)', scheduledDate: this.calculateMilestoneDate(sample.productionDate, totalDays, 0.25), testedDate: '', inspectorName: '', result: '', issueCategory: '', defectTags: [], notes: '', rejectionReason: '', photoDataUrl: null },
-                            { id: Date.now() + Math.random(), stage: 'Mid-Life (50%)', scheduledDate: this.calculateMilestoneDate(sample.productionDate, totalDays, 0.50), testedDate: '', inspectorName: '', result: '', issueCategory: '', defectTags: [], notes: '', rejectionReason: '', photoDataUrl: null },
-                            { id: Date.now() + Math.random(), stage: 'Three-Quarter-Life (75%)', scheduledDate: this.calculateMilestoneDate(sample.productionDate, totalDays, 0.75), testedDate: '', inspectorName: '', result: '', issueCategory: '', defectTags: [], notes: '', rejectionReason: '', photoDataUrl: null },
-                            { id: Date.now() + Math.random(), stage: 'End-of-Life (100%)', scheduledDate: this.calculateMilestoneDate(sample.productionDate, totalDays, 1), testedDate: '', inspectorName: '', result: '', issueCategory: '', defectTags: [], notes: '', rejectionReason: '', photoDataUrl: null }
-                        ];
-                        migrated = true;
-                    }
-                });
-
-                if (migrated) {
-                    console.log('[Migration] Automatically updated stored sample dates and generated missing milestones.');
-                    try {
-                        this.persistAppState();
-                    } catch(e){}
-                }
-
-                    
-                    
-                this.updateHtmlDir();
-                this.$nextTick(() => {
-                    this.updateCharts();
-                });
-                // Keep the UI resilient if Supabase is temporarily unavailable; authentication remains required.
-                if (supabaseClient) {
-                    try {
-                        await this.initializeSupabaseSync();
-                    } catch (e) {
-                        console.error('[Supabase] Initial sync skipped:', e);
-                    }
-                } else {
-                    console.warn('[Supabase] Client unavailable; continuing in local UI mode.');
-                }
-                this.$nextTick(() => {
-                    this.updateCharts();
-                });
-            },
-            watch: {
-                currentSection(newSection) {
-                    if (newSection === 'dashboard') {
-                        this.$nextTick(() => this.updateCharts());
-                    }
                 },
                 productCatalog: {
                     deep: true,

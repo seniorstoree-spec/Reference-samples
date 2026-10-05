@@ -1345,9 +1345,12 @@
     </div>
 
     <script>
-        // Set Chart defaults for typography
-        Chart.defaults.font.family = "'Cairo', 'Inter', sans-serif";
-        Chart.defaults.color = "#4b5563";
+        // Chart.js is optional for the login screen. Never let a chart CDN/runtime
+        // failure prevent Vue from mounting and leave raw template expressions visible.
+        if (window.Chart && window.Chart.defaults) {
+            window.Chart.defaults.font.family = "'Cairo', 'Inter', sans-serif";
+            window.Chart.defaults.color = "#4b5563";
+        }
 
         const dictionary = {
             "title": { en: "Reference/Retention Sample Management", ar: "قسم العينات المرجعية" },

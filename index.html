@@ -2320,6 +2320,52 @@
                     local.forEach(x => { const k=this.getSampleKey(x); if(!k)return; const old=byKey.get(k); if(!old) byKey.set(k,x); else if(new Date(x.updatedAt||0)>new Date(old.updatedAt||0)) byKey.set(k,x); });
                     return Array.from(byKey.values());
                 },
+                mergeCatalogSafely(serverCatalog, localCatalog) {
+                    const server = Array.isArray(serverCatalog) ? serverCatalog : [];
+                    const local = Array.isArray(localCatalog) ? localCatalog : [];
+                    const byKey = new Map();
+                    const hasValue = (value) => value !== undefined && value !== null && String(value).trim() !== '';
+                    const mergeItem = (serverItem, localItem) => {
+                        const base = serverItem ? { ...serverItem } : {};
+                        const localValue = localItem ? { ...localItem } : {};
+                        const result = { ...base, ...localValue };
+
+                        // Catalog permissions/shelf-life are critical master data.
+                        // A stale browser copy must NEVER replace a valid server value
+                        // with null, empty text, or an undefined field.
+                        const protectedFields = [
+                            'shelfLifeUnit', 'shelfLifeMonths', 'expMonth', 'expDay', 'expYear'
+                        ];
+                        protectedFields.forEach(field => {
+                            const serverHas = hasValue(serverItem?.[field]);
+                            const localHas = hasValue(localItem?.[field]);
+                            if (serverHas && !localHas) result[field] = serverItem[field];
+                        });
+
+                        // Preserve any server-side master-data fields that a stale local
+                        // record does not know about.
+                        if (serverItem) {
+                            Object.keys(serverItem).forEach(field => {
+                                if (!hasValue(localItem?.[field]) && hasValue(serverItem[field])) {
+                                    result[field] = serverItem[field];
+                                }
+                            });
+                        }
+                        return result;
+                    };
+
+                    server.forEach(item => {
+                        const key = this.getCatalogKey(item);
+                        if (key) byKey.set(key, { ...item });
+                    });
+                    local.forEach(item => {
+                        const key = this.getCatalogKey(item);
+                        if (!key) return;
+                        const existing = byKey.get(key);
+                        byKey.set(key, existing ? mergeItem(existing, item) : { ...item });
+                    });
+                    return Array.from(byKey.values());
+                },
                 async refreshDeletedItems() {
                     try {
                         const localRaw = localStorage.getItem('QC_DELETED_SAMPLES') || '[]';
@@ -2523,7 +2569,7 @@
                                 .filter(x=>!deletedCatalogKeys.has(this.getCatalogKey(x)));
                             const localCatalogSafe = localCatalog
                                 .filter(x=>!deletedCatalogKeys.has(this.getCatalogKey(x)));
-                            const mergedCatalog = this.mergeDeletedItems(serverCatalog, localCatalogSafe);
+                            const mergedCatalog = this.mergeCatalogSafely(serverCatalog, localCatalogSafe);
 
                             // Keep inspection details collapsed after login/refresh.
                             mergedSamples.forEach(sample => { sample.expanded = false; });
@@ -2656,7 +2702,7 @@
                             : this.mergeSamplesSafely(serverSamples, (this.samples||[]).filter(x=>!ds.has(this.getSampleKey(x))));
                         const mergedCatalog = reason === 'initial-seed' && !current
                             ? (Array.isArray(window.MASTER_CATALOG_SEED) ? [...window.MASTER_CATALOG_SEED] : [])
-                            : (this.productCatalog||[]).filter(x=>!dc.has(this.getCatalogKey(x)));
+                            : this.mergeCatalogSafely(serverCatalog, (this.productCatalog||[]).filter(x=>!dc.has(this.getCatalogKey(x))));
 
                         if (serverSamples.length > mergedSamples.length && !reason.startsWith('delete-') && !reason.startsWith('restore-')) {
                             this.samples = serverSamples;
@@ -3257,18 +3303,32 @@
                                 }
                                 const expirationDate = prodDate.toISOString().split('T')[0];
 
+                                const hasImportedShelfLife = day > 0 || month > 0 || year > 0;
                                 const importedItem = {
                                     name,
-                                    serial,
-                                    shelfLifeUnit: (day > 0 ? 'Days' : year > 0 ? 'Years' : 'Months'),
-                                    shelfLifeMonths: day > 0 ? Math.ceil(day / 30) : year > 0 ? year * 12 : (month > 0 ? month : null),
-                                    expMonth: month > 0 ? month : null,
-                                    expDay: day > 0 ? day : null,
-                                    expYear: year > 0 ? year : null,
-                                    expirationDate
+                                    serial
                                 };
+                                if (hasImportedShelfLife) {
+                                    importedItem.shelfLifeUnit = day > 0 ? 'Days' : year > 0 ? 'Years' : 'Months';
+                                    importedItem.shelfLifeMonths = day > 0 ? Math.ceil(day / 30) : year > 0 ? year * 12 : month;
+                                    importedItem.expMonth = month > 0 ? month : null;
+                                    importedItem.expDay = day > 0 ? day : null;
+                                    importedItem.expYear = year > 0 ? year : null;
+                                    importedItem.expirationDate = expirationDate;
+                                } else if (existingIndex < 0) {
+                                    // New items without a shelf-life value use the normal 6-month
+                                    // application fallback, but existing permissions are never erased.
+                                    importedItem.shelfLifeUnit = 'Months';
+                                    importedItem.shelfLifeMonths = 6;
+                                    importedItem.expMonth = 6;
+                                    importedItem.expDay = null;
+                                    importedItem.expYear = null;
+                                }
                                 if (existingIndex >= 0) {
-                                    this.productCatalog[existingIndex] = { ...this.productCatalog[existingIndex], ...importedItem };
+                                    this.productCatalog[existingIndex] = this.mergeCatalogSafely(
+                                        [this.productCatalog[existingIndex]],
+                                        [importedItem]
+                                    )[0];
                                 } else {
                                     this.productCatalog.push(importedItem);
                                 }

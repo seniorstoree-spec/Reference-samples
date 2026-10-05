@@ -1822,21 +1822,40 @@
 
                     if (prod) {
                         let applied = false;
-                        if (prod.expYear && !isNaN(parseInt(prod.expYear, 10)) && parseInt(prod.expYear, 10) > 0) {
-                            prodDate.setFullYear(prodDate.getFullYear() + parseInt(prod.expYear, 10));
+                        const unit = prod.shelfLifeUnit || '';
+                        const years = parseInt(prod.expYear, 10);
+                        const months = parseInt(prod.expMonth, 10);
+                        const days = parseInt(prod.expDay, 10);
+                        const canonicalMonths = parseInt(prod.shelfLifeMonths, 10);
+
+                        // Use exactly one canonical unit, then add any explicit day component.
+                        // This prevents a Years/Days rule from being counted twice through shelfLifeMonths.
+                        if (unit === 'Years' || (!unit && years > 0 && months <= 0)) {
+                            if (years > 0) {
+                                prodDate.setFullYear(prodDate.getFullYear() + years);
+                                applied = true;
+                            }
+                        } else if (unit === 'Days' || (!unit && days > 0 && months <= 0 && years <= 0)) {
+                            // Days are stored explicitly and must not also use the rounded month fallback.
+                            if (days > 0) {
+                                prodDate.setDate(prodDate.getDate() + days);
+                                applied = true;
+                            }
+                        } else if (months > 0) {
+                            prodDate.setMonth(prodDate.getMonth() + months);
+                            applied = true;
+                        } else if (canonicalMonths > 0) {
+                            prodDate.setMonth(prodDate.getMonth() + canonicalMonths);
                             applied = true;
                         }
-                        if (prod.expMonth && !isNaN(parseInt(prod.expMonth, 10)) && parseInt(prod.expMonth, 10) > 0) {
-                            prodDate.setMonth(prodDate.getMonth() + parseInt(prod.expMonth, 10));
-                            applied = true;
-                        } else if (prod.shelfLifeMonths && !isNaN(parseInt(prod.shelfLifeMonths, 10)) && parseInt(prod.shelfLifeMonths, 10) > 0) {
-                            prodDate.setMonth(prodDate.getMonth() + parseInt(prod.shelfLifeMonths, 10));
-                            applied = true;
-                        }
-                        if (prod.expDay && !isNaN(parseInt(prod.expDay, 10)) && parseInt(prod.expDay, 10) > 0) {
-                            prodDate.setDate(prodDate.getDate() + parseInt(prod.expDay, 10));
+
+                        // Legacy/mixed catalog records may contain an explicit day component.
+                        // For the new single-unit editor this is normally null.
+                        if (unit !== 'Days' && days > 0) {
+                            prodDate.setDate(prodDate.getDate() + days);
                             applied = true;
                         }
+
                         if (applied) {
                             return prodDate.toISOString().split('T')[0];
                         }

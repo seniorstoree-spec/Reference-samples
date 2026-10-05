@@ -2320,7 +2320,7 @@
                     local.forEach(x => { const k=this.getSampleKey(x); if(!k)return; const old=byKey.get(k); if(!old) byKey.set(k,x); else if(new Date(x.updatedAt||0)>new Date(old.updatedAt||0)) byKey.set(k,x); });
                     return Array.from(byKey.values());
                 },
-                mergeCatalogSafely(serverCatalog, localCatalog) {
+                mergeCatalogSafely(serverCatalog, localCatalog, options = {}) {
                     const server = Array.isArray(serverCatalog) ? serverCatalog : [];
                     const local = Array.isArray(localCatalog) ? localCatalog : [];
                     const byKey = new Map();
@@ -2332,14 +2332,16 @@
 
                         // Catalog permissions/shelf-life are critical master data.
                         // A stale browser copy must NEVER replace a valid server value
-                        // with null, empty text, or an undefined field.
+                        // with null, empty text, or an undefined field. Explicit catalog
+                        // edits/imports may opt in to preferring the new local value.
+                        const preferLocalProtectedFields = options.preferLocalProtectedFields === true;
                         const protectedFields = [
                             'shelfLifeUnit', 'shelfLifeMonths', 'expMonth', 'expDay', 'expYear'
                         ];
                         protectedFields.forEach(field => {
                             const serverHas = hasValue(serverItem?.[field]);
                             const localHas = hasValue(localItem?.[field]);
-                            if (serverHas && !localHas) result[field] = serverItem[field];
+                            if (serverHas && (!localHas || !preferLocalProtectedFields)) result[field] = preferLocalProtectedFields && localHas ? localItem[field] : serverItem[field];
                         });
 
                         // Preserve any server-side master-data fields that a stale local
@@ -2708,6 +2710,20 @@
                             this.samples = serverSamples;
                             localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(serverSamples));
                             await this.createStateSnapshot('blocked-destructive-overwrite');
+                            return false;
+                        }
+
+                        // CRITICAL CATALOG DATA-SAFETY RULE:
+                        // Never overwrite the server catalog with a local copy that is
+                        // missing an existing server product unless the missing product is
+                        // represented by an authoritative catalog deletion/restore flow.
+                        const mergedCatalogKeys = new Set(mergedCatalog.map(x => this.getCatalogKey(x)).filter(Boolean));
+                        const unexpectedMissingCatalogKeys = serverCatalog
+                            .map(x => this.getCatalogKey(x))
+                            .filter(key => key && !mergedCatalogKeys.has(key));
+                        if (unexpectedMissingCatalogKeys.length > 0 && !reason.startsWith('delete-catalog') && !reason.startsWith('restore-catalog') && !reason.startsWith('permanent-delete-catalog')) {
+                            await this.createStateSnapshot('blocked-destructive-catalog-overwrite');
+                            console.warn('[Supabase] Catalog save blocked: server contains products missing from local state.', unexpectedMissingCatalogKeys);
                             return false;
                         }
 
@@ -3327,7 +3343,8 @@
                                 if (existingIndex >= 0) {
                                     this.productCatalog[existingIndex] = this.mergeCatalogSafely(
                                         [this.productCatalog[existingIndex]],
-                                        [importedItem]
+                                        [importedItem],
+                                        { preferLocalProtectedFields: true }
                                     )[0];
                                 } else {
                                     this.productCatalog.push(importedItem);

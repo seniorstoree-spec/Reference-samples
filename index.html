@@ -2201,7 +2201,9 @@
 
                         if (data) {
                             // Load deleted records explicitly before filtering active records.
-                            // This guarantees the Deleted Items section is populated from Supabase after refresh/login.
+                            // IMPORTANT: a deletion tombstone is authoritative. If an old active
+                            // sample still exists in Supabase, it must NOT be allowed to return
+                            // after refresh.
                             const serverPermanent = Array.isArray(data.permanently_deleted_samples) ? data.permanently_deleted_samples : [];
                             const localPermanent = Array.isArray(this.permanentlyDeletedSamples) ? this.permanentlyDeletedSamples : [];
                             const permanentByKey = new Map();
@@ -2212,10 +2214,17 @@
                             this.permanentlyDeletedSamples = Array.from(permanentByKey.values());
                             const permanentKeys = new Set(this.permanentlyDeletedSamples.map(x => String(x.key || '')).filter(Boolean));
 
+                            // Supabase is the durable source for deletions, but any local
+                            // deletion created before a refresh must also be preserved and reconciled.
+                            // The merged tombstones are then used to filter the active sample list.
                             this.deletedSamples = this.mergeDeletedItems(
                                 Array.isArray(data.deleted_samples) ? data.deleted_samples : [],
                                 this.deletedSamples
                             ).filter(item => !permanentKeys.has(this.getSampleKey(item)));
+
+                            const deletedSampleKeysForSync = new Set(
+                                this.deletedSamples.map(item => this.getSampleKey(item)).filter(Boolean)
+                            );
 
                             this.deletedCatalog = this.mergeDeletedItems(
                                 Array.isArray(data.deleted_catalog) ? data.deleted_catalog : [],
@@ -2226,7 +2235,7 @@
                             localStorage.setItem('QC_DELETED_SAMPLES', JSON.stringify(this.deletedSamples));
                             localStorage.setItem('QC_DELETED_CATALOG', JSON.stringify(this.deletedCatalog));
                             const deletedSampleKeys = new Set([
-                                ...this.deletedSamples.map(x=>this.getSampleKey(x)),
+                                ...deletedSampleKeysForSync,
                                 ...this.permanentlyDeletedSamples.map(x=>String(x.key || ''))
                             ].filter(Boolean));
                             const deletedCatalogKeys = new Set(this.deletedCatalog.map(x=>this.getCatalogKey(x)).filter(Boolean));
@@ -2261,6 +2270,24 @@
 
                             if (data.app_data_version) {
                                 window.APP_DATA_VERSION = data.app_data_version;
+                            }
+
+                            // Reconcile deletion tombstones back to Supabase. This is the key
+                            // protection against a deleted sample reappearing after refresh:
+                            // if the server still has an old copy, persistAppState() removes it
+                            // from samples and writes the tombstone to deleted_samples.
+                            if (deletedSampleKeysForSync.size > 0) {
+                                const serverHadDeletedSample = (Array.isArray(data.samples) ? data.samples : [])
+                                    .some(item => deletedSampleKeysForSync.has(this.getSampleKey(item)));
+                                const serverMissingTombstones = this.deletedSamples.some(item =>
+                                    !Array.isArray(data.deleted_samples) ||
+                                    !data.deleted_samples.some(serverItem =>
+                                        this.getSampleKey(serverItem) === this.getSampleKey(item)
+                                    )
+                                );
+                                if (serverHadDeletedSample || serverMissingTombstones) {
+                                    await this.persistAppState('reconcile-deleted-samples');
+                                }
                             }
                         }
 
@@ -3489,10 +3516,49 @@
                 async deleteSample(sample) {
                     if(!window.confirm(this.lang==='ar' ? `هل تريد نقل العينة (رقم التشغيلة: ${sample.batchNumber}) إلى المحذوفات؟` : `Move batch ${sample.batchNumber} to Deleted Items?`)) return;
                     const i=this.samples.findIndex(x=>x.id===sample.id); if(i<0)return;
+
+                    const deletedItem = {
+                        ...sample,
+                        deletedAt: new Date().toISOString(),
+                        deletedBy: this.auth.username || this.auth.email || 'user'
+                    };
+
+                    // Write the tombstone locally BEFORE the server write. This guarantees
+                    // a refresh cannot treat the old active record as authoritative.
                     this.samples.splice(i,1);
-                    this.deletedSamples.push({...sample,deletedAt:new Date().toISOString(),deletedBy:this.auth.username||this.auth.email||'user'});
-                    await this.persistAppState('delete-sample');
-                    this.showToast(this.lang==='ar'?'تم نقل العينة إلى المحذوفات':'Sample moved to Deleted Items');
+                    this.deletedSamples = this.mergeDeletedItems(this.deletedSamples, [deletedItem]);
+                    localStorage.setItem('QC_DELETED_SAMPLES', JSON.stringify(this.deletedSamples));
+                    localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(this.samples));
+
+                    const saved = await this.persistAppState('delete-sample');
+                    if (!saved) {
+                        this.showToast(this.lang==='ar'?'تعذر حفظ الحذف على الخادم. أعد المحاولة قبل تحديث الصفحة.':'The deletion could not be saved to the server. Please retry before refreshing.','error');
+                        return;
+                    }
+
+                    // Verify that the tombstone is actually durable in Supabase.
+                    try {
+                        const { data: verifyData, error: verifyError } = await supabaseClient
+                            .from('reference_app_state')
+                            .select('samples,deleted_samples')
+                            .eq('id', 1)
+                            .maybeSingle();
+                        if (verifyError) throw verifyError;
+                        const key = this.getSampleKey(deletedItem);
+                        const stillActive = (Array.isArray(verifyData?.samples) ? verifyData.samples : [])
+                            .some(x => this.getSampleKey(x) === key);
+                        const tombstoneSaved = (Array.isArray(verifyData?.deleted_samples) ? verifyData.deleted_samples : [])
+                            .some(x => this.getSampleKey(x) === key);
+                        if (stillActive || !tombstoneSaved) {
+                            throw new Error('Deletion verification failed');
+                        }
+                    } catch (verificationError) {
+                        console.error('[Deleted Items] Durable deletion verification failed:', verificationError);
+                        this.showToast(this.lang==='ar'?'تم الحذف محليًا لكن لم يتم تأكيد الحفظ على الخادم. لا تقم بتحديث الصفحة قبل إعادة المحاولة.':'Deleted locally, but server persistence was not confirmed. Do not refresh until you retry.','error');
+                        return;
+                    }
+
+                    this.showToast(this.lang==='ar'?'تم نقل العينة إلى المحذوفات وحفظ الحذف بنجاح':'Sample moved to Deleted Items and deletion was saved successfully');
                 },
                 async restoreDeletedSample(item) {
                     const key=this.getSampleKey(item);

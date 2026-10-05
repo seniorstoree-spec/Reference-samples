@@ -1900,6 +1900,12 @@
                 inspectionsDueToday() {
                     let due = [];
                     this.samples.forEach(sample => {
+                        // Only active / near-expiry samples are eligible for today's
+                        // inspection alerts. Archived, rejected, and other terminal
+                        // samples must never appear in the notification panel.
+                        const status = this.getStatus(sample);
+                        if (!['Active', 'Near Expiry'].includes(status)) return;
+
                         sample.inspections.forEach(insp => {
                             if (this.getInspectionStatus(insp) === 'Due Today') {
                                 due.push({ sample, insp });
@@ -2063,7 +2069,8 @@
                         // KPI Filter Logic
                         if (this.activeKpiFilter) {
                             if (this.activeKpiFilter === 'dueToday') {
-                                const isDueToday = sample.inspections.some(i => this.getInspectionStatus(i) === 'Due Today');
+                                const isActiveForInspection = ['Active', 'Near Expiry'].includes(status);
+                                const isDueToday = isActiveForInspection && sample.inspections.some(i => this.getInspectionStatus(i) === 'Due Today');
                                 if (!isDueToday) return false;
                             } else if (this.activeKpiFilter === 'nearExpiry') {
                                 if (status !== 'Near Expiry') return false;

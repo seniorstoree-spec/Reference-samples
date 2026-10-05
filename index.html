@@ -1659,6 +1659,28 @@
                         : 'The login service is currently unavailable. Reload the page and try again.';
                     console.error('[Auth] Supabase client is unavailable.');
                 }
+
+                // IMPORTANT: synchronize the authenticated user's private dataset BEFORE any
+                // legacy localStorage migration runs. This prevents stale browser data from
+                // being treated as the current user's server data.
+                if (supabaseClient && this.auth.isAuthenticated && this.currentUserId) {
+                    try {
+                        const synced = await this.initializeSupabaseSync();
+                        if (!synced) {
+                            this.auth.error = this.lang === 'ar'
+                                ? 'تعذر تحميل بيانات حسابك من الخادم. لم يتم السماح بحفظ بيانات قديمة من المتصفح.'
+                                : 'Could not load this account data from the server. Saving stale browser data is disabled.';
+                            return;
+                        }
+                    } catch (e) {
+                        console.error('[Supabase] Required initial user sync failed:', e);
+                        this.auth.error = this.lang === 'ar'
+                            ? 'تعذر تحميل بيانات حسابك. أعد تحميل الصفحة وحاول مرة أخرى.'
+                            : 'Could not load this account data. Please reload and try again.';
+                        return;
+                    }
+                }
+
                 // Migration: Sync all loaded samples with master catalog rules
                 let migrated = false;
                 this.samples.forEach(sample => {
@@ -1702,16 +1724,6 @@
                 this.$nextTick(() => {
                     this.updateCharts();
                 });
-                // Keep the UI resilient if Supabase is temporarily unavailable; authentication remains required.
-                if (supabaseClient) {
-                    try {
-                        await this.initializeSupabaseSync();
-                    } catch (e) {
-                        console.error('[Supabase] Initial sync skipped:', e);
-                    }
-                } else {
-                    console.warn('[Supabase] Client unavailable; continuing in local UI mode.');
-                }
                 this.$nextTick(() => {
                     this.updateCharts();
                 });
@@ -3573,6 +3585,24 @@
                     this.regenerateFormSchedule();
                 },
                 async addSample() {
+                    // A sample must never be written until the authenticated user's private
+                    // Supabase state is ready. This also makes the Add button reliable after
+                    // refresh/session restoration.
+                    if (!this.currentUserId || !this.auth.isAuthenticated) {
+                        this.showToast(this.lang === 'ar'
+                            ? 'جارٍ تحميل بيانات الحساب. انتظر لحظة ثم حاول مرة أخرى.'
+                            : 'Your account data is still loading. Please try again.', 'error');
+                        return;
+                    }
+                    if (!this._supabaseInitialSyncCompleted) {
+                        const synced = await this.initializeSupabaseSync();
+                        if (!synced) {
+                            this.showToast(this.lang === 'ar'
+                                ? 'تعذر تحميل بيانات الحساب، لذلك لم تتم إضافة العينة.'
+                                : 'Could not load this account data, so the sample was not added.', 'error');
+                            return;
+                        }
+                    }
                     if (!this.form.productName) {
                         alert(this.lang === 'ar' ? 'يرجى اختيار صنف من القائمة' : 'Please select a product from the list');
                         return;
@@ -3629,7 +3659,7 @@
                         return;
                     }
 
-                    this.form = { productName: '', batchNumber: '', productionDate: '', expirationDate: '', customShelfLife: 6, notes: '' };
+                    this.form = { productName: '', batchNumber: '', sampleCount: 1, productionDate: '', expirationDate: '', customShelfLife: 6, notes: '' };
                     this.formInspections = [];
                     this.showToast(this.lang === 'ar' ? 'تمت إضافة العينة وحفظ فترات الفحص بنجاح' : 'Sample added and inspection intervals saved');
                 },

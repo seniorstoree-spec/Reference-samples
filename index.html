@@ -1575,7 +1575,11 @@
                         results: null,
                         categories: null,
                         defects: null
-                    }
+                    },
+                    // Shared-data safety: Supabase must finish the first sync before any
+                    // localStorage-backed state is allowed to be persisted to the shared row.
+                    _supabaseInitialSyncCompleted: false,
+                    _supabaseSyncInFlight: null
                 }
             },
             
@@ -2309,25 +2313,21 @@
                             ].filter(Boolean));
 // Never replace a larger local sample set with a smaller server set.
                             // This protects data during refreshes and deployments.
-                            const mergedSamples = this.mergeSamplesSafely(
-                                (Array.isArray(data.samples) ? data.samples : []).filter(x=>!deletedSampleKeys.has(this.getSampleKey(x))),
-                                localSamples.filter(x=>!deletedSampleKeys.has(this.getSampleKey(x)))
-                            );
+                            // IMPORTANT: this is a shared multi-user application. Once the shared state row
+                            // exists, the server copy is authoritative during refresh/login.
+                            // Do NOT merge another user's browser localStorage into it here.
+                            // Browser localStorage is per-user/per-browser and can otherwise
+                            // make one user's dataset appear instead of the shared dataset.
+                            const mergedSamples = (Array.isArray(data.samples) ? data.samples : [])
+                                .filter(x=>!deletedSampleKeys.has(this.getSampleKey(x)));
                             const serverSamplesCount = Array.isArray(data.samples) ? data.samples.length : 0;
 
                             // Keep inspection details collapsed after login/refresh.
                             // The user can expand them only with the dedicated arrow.
                             mergedSamples.forEach(sample => { sample.expanded = false; });
 
-                            if (mergedSamples.length > serverSamplesCount) {
-                                this.samples = mergedSamples;
-                                localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(mergedSamples));
-                                await this.createStateSnapshot('recovered-local-samples-before-sync');
-                                await this.persistAppState('recovered-local-samples');
-                            } else {
-                                this.samples = mergedSamples;
-                                localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(mergedSamples));
-                            }
+                            this.samples = mergedSamples;
+                            localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(mergedSamples));
 
                             if (Array.isArray(data.catalog) && data.catalog.length > 0) {
                                 this.productCatalog = data.catalog.filter(x=>!deletedCatalogKeys.has(this.getCatalogKey(x)));
@@ -2359,11 +2359,14 @@
                             }
                         }
 
-                        if (!data || !Array.isArray(data.catalog) || data.catalog.length === 0) {
+                        if (!data) {
+                            // Only seed a brand-new shared state row. Never seed/overwrite an
+                            // existing shared row from browser-local data during refresh.
                             await this.persistAppState('initial-seed');
                         }
 
-                        console.log('[Supabase Sync] Protected sync ready.', session.user.id);
+                        this._supabaseInitialSyncCompleted = true;
+                        console.log('[Supabase Sync] Protected shared-data sync ready.', session.user.id);
                         return true;
                     } catch (error) {
                         console.warn('[Supabase Sync] Backend unavailable; LocalStorage fallback remains active.', error);
@@ -2377,6 +2380,13 @@
                     }
                 },
                 async persistAppState(reason = 'automatic', options = {}) {
+                    // Before the first successful shared-state sync, localStorage contains
+                    // browser-specific data and must NEVER overwrite the common Supabase row.
+                    // This was the root cause of users seeing different datasets after refresh.
+                    if (supabaseClient && !this._supabaseInitialSyncCompleted && reason !== 'initial-seed') {
+                        console.warn('[Supabase] Save skipped until the shared initial sync completes:', reason);
+                        return false;
+                    }
                     try {
                         const { data: current, error: readError } = await supabaseClient.from('reference_app_state')
                             .select('catalog,samples,deleted_samples,deleted_catalog,permanently_deleted_samples,app_data_version').eq('id',1).maybeSingle();

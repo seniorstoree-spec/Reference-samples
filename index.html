@@ -868,10 +868,10 @@
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
-                            <tr v-if="productCatalog.length === 0">
-                                <td colspan="7" class="p-8 text-center text-gray-400 italic">{{ t('noData') }}</td>
+                            <tr v-if="filteredProductCatalog.length === 0">
+                                <td colspan="7" class="p-8 text-center text-gray-400 italic">{{ catalogSearchQuery ? (lang === 'ar' ? 'لا توجد نتائج مطابقة للبحث' : 'No matching results') : t('noData') }}</td>
                             </tr>
-                            <tr v-for="(item, index) in productCatalog" :key="index" class="hover:bg-gray-50 transition-colors">
+                            <tr v-for="(item, index) in filteredProductCatalog" :key="item.name + '-' + index" class="hover:bg-gray-50 transition-colors">
                                 <td class="p-4 text-center">
                                     <input type="checkbox" :value="item.name" v-model="catalogSelectedItems" class="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer">
                                 </td>
@@ -1916,6 +1916,18 @@
                     const product = this.rejectedArchiveExplorer.selectedProduct;
                     if (!year || !month || !product) return [];
                     return this.rejectedTree[year]?.[month]?.[product] || [];
+                },
+                filteredProductCatalog() {
+                    const query = (this.catalogSearchQuery || '').trim().toLowerCase();
+                    if (!query) return this.productCatalog;
+                    return this.productCatalog.filter(item => {
+                        const nameAr = String(this.t(item.name) || '').trim().toLowerCase();
+                        const nameRaw = String(item.name || '').trim().toLowerCase();
+                        const shelfLife = String(item.shelfLifeMonths ?? '').trim().toLowerCase();
+                        const unit = String(item.shelfLifeUnit || 'Months').trim().toLowerCase();
+                        const unitAr = unit === 'days' || unit === 'day' ? 'يوم' : unit === 'years' || unit === 'year' ? 'سنة' : 'شهر';
+                        return nameAr.includes(query) || nameRaw.includes(query) || shelfLife.includes(query) || unit.includes(query) || unitAr.includes(query);
+                    });
                 },
                 catalogAllSelected() {
                     return this.productCatalog.length > 0 && this.catalogSelectedItems.length === this.productCatalog.length;

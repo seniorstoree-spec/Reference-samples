@@ -2291,6 +2291,8 @@
                             deletionRegistry.filter(x => x.entity_type === 'catalog').map(x => String(x.entity_key || '')).filter(Boolean)
                         );
 
+                        let syncNeedsReconciliation = false;
+
                         if (data) {
                             // Load deleted records explicitly before filtering active records.
                             // IMPORTANT: a deletion tombstone is authoritative. If an old active
@@ -2363,6 +2365,10 @@
                                 localStorage.setItem('QC_MASTER_CATALOG_DATA', JSON.stringify(mergedCatalog));
                             }
 
+                            syncNeedsReconciliation =
+                                mergedSamples.length > serverSamples.length ||
+                                mergedCatalog.length > serverCatalog.length;
+
                             if (data.app_data_version) {
                                 window.APP_DATA_VERSION = data.app_data_version;
                             }
@@ -2394,6 +2400,18 @@
                         }
 
                         this._supabaseInitialSyncCompleted = true;
+
+                        // Repair the server from the non-destructively merged state. This runs
+                        // only when the merge found data that was missing from the server.
+                        // It can add/reconcile records, but it cannot intentionally delete
+                        // records during a normal refresh.
+                        if (data && syncNeedsReconciliation) {
+                            const repaired = await this.persistAppState('sync-reconcile');
+                            if (!repaired) {
+                                console.warn('[Supabase Sync] Reconciliation could not be persisted; local data remains intact.');
+                            }
+                        }
+
                         console.log('[Supabase Sync] Protected shared-data sync ready.', session.user.id);
                         return true;
                     } catch (error) {

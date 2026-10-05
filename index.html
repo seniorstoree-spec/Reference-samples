@@ -3991,18 +3991,27 @@
                     } else {
                         insp.photoDataUrl = null; insp.issueCategory = ''; insp.defectTags = [];
                     }
-                    if (this.modalForm.result === 'Rejected') {
+                    if (this.modalForm.result === 'Rejected' || this.modalForm.result === 'مرفوض') {
                         // A rejected sample must leave Active Samples and appear in Rejected Samples.
                         sample.statusOverride = 'Rejected';
                         sample.rejectedAt = this.modalForm.testedDate || new Date().toISOString().split('T')[0];
-                    } else if (this.modalForm.result === 'Shelf Life Expired') {
-                        sample.statusOverride = 'Archived / Expired'; sample.terminalTimestamp = new Date().toISOString();
+                    } else if (this.modalForm.result === 'Shelf Life Expired' || this.modalForm.result === 'انتهاء صلاحية') {
+                        // Shelf-life expiry is a terminal inspection result. Persist an explicit
+                        // archive status so the sample immediately leaves Active Samples and
+                        // remains in Archive after refresh/synchronization.
+                        sample.statusOverride = 'Archived / Expired';
+                        sample.terminalTimestamp = this.modalForm.testedDate
+                            ? new Date(this.modalForm.testedDate + 'T00:00:00').toISOString()
+                            : new Date().toISOString();
                     } else if (sample.statusOverride === 'Rejected') {
                         // If a previously rejected inspection is changed to another result, restore normal status calculation.
                         sample.statusOverride = null;
                         sample.rejectedAt = null;
                     } else if (sample.statusOverride === 'Archived / Expired') {
-                        sample.statusOverride = null; sample.terminalTimestamp = null;
+                        // Only remove the terminal archive state when the same inspection is
+                        // explicitly changed away from the shelf-life-expired result.
+                        sample.statusOverride = null;
+                        sample.terminalTimestamp = null;
                     }
                     sample.lastInspectionDate = this.modalForm.testedDate || new Date().toISOString().split('T')[0];
                     // Mark the sample as newer than the server copy so the edited inspection

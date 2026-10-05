@@ -3297,7 +3297,7 @@
                     }
 
                     const reader = new FileReader();
-                    reader.onload = (e) => {
+                    reader.onload = async (e) => {
                         try {
                             const data = e.target.result;
                             const workbook = window.XLSX.read(data, { type: typeof data === 'string' ? 'binary' : 'array' });

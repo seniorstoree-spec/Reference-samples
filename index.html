@@ -3157,8 +3157,7 @@
                                 const year = (yearIdx !== -1 && row[yearIdx] != null) ? parseInt(row[yearIdx], 10) : null;
 
                                 // Duplicate check based on name
-                                const exists = this.productCatalog.some(p => p.name.trim().toLowerCase() === name.toLowerCase());
-                                if (exists) continue;
+                                const existingIndex = this.productCatalog.findIndex(p => p.name.trim().toLowerCase() === name.toLowerCase());
 
                                 // Calculate expiration date based on today as production date
                                 let prodDate = new Date();
@@ -3173,14 +3172,21 @@
                                 }
                                 const expirationDate = prodDate.toISOString().split('T')[0];
 
-                                this.productCatalog.push({
+                                const importedItem = {
                                     name,
                                     serial,
-                                    expMonth: (!isNaN(month) && month > 0) ? month : null,
-                                    expDay: (!isNaN(day) && day > 0) ? day : null,
-                                    expYear: (!isNaN(year) && year > 0) ? year : null,
+                                    shelfLifeUnit: (day > 0 ? 'Days' : year > 0 ? 'Years' : 'Months'),
+                                    shelfLifeMonths: day > 0 ? Math.ceil(day / 30) : year > 0 ? year * 12 : (month > 0 ? month : null),
+                                    expMonth: month > 0 ? month : null,
+                                    expDay: day > 0 ? day : null,
+                                    expYear: year > 0 ? year : null,
                                     expirationDate
-                                });
+                                };
+                                if (existingIndex >= 0) {
+                                    this.productCatalog[existingIndex] = { ...this.productCatalog[existingIndex], ...importedItem };
+                                } else {
+                                    this.productCatalog.push(importedItem);
+                                }
                                 imported++;
                             }
                             if (imported > 0) {

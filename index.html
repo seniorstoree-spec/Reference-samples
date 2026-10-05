@@ -2078,11 +2078,15 @@
             methods: {
                 getSampleKey(sample) { return String(sample?.id ?? sample?.sampleId ?? sample?.operationalNumber ?? '').trim(); },
                 getCatalogKey(item) { return String(item?.id ?? item?.name ?? '').trim().toLowerCase(); },
+                getCurrentUserId() {
+                    return String(this.currentUserId || '').trim();
+                },
                 async loadDeletedRegistry() {
                     if (!supabaseClient) return [];
                     const { data, error } = await supabaseClient
-                        .from('reference_deleted_registry')
-                        .select('entity_type,entity_key,payload,deleted_at,deleted_by,is_permanent');
+                        .from('reference_user_deleted_registry')
+                        .select('entity_type,entity_key,payload,deleted_at,deleted_by,is_permanent')
+                        .eq('owner_user_id', this.getCurrentUserId());
                     if (error) throw error;
                     return Array.isArray(data) ? data : [];
                 },
@@ -2090,15 +2094,16 @@
                     const entityKey = entityType === 'sample' ? this.getSampleKey(item) : this.getCatalogKey(item);
                     if (!entityKey) throw new Error('Cannot create deletion key');
                     const { error } = await supabaseClient
-                        .from('reference_deleted_registry')
+                        .from('reference_user_deleted_registry')
                         .upsert({
+                            owner_user_id: this.getCurrentUserId(),
                             entity_type: entityType,
                             entity_key: entityKey,
                             payload: item,
                             deleted_at: item.deletedAt || new Date().toISOString(),
                             deleted_by: item.deletedBy || this.auth.username || this.auth.email || 'user',
                             is_permanent: !!isPermanent
-                        }, { onConflict: 'entity_type,entity_key' });
+                        }, { onConflict: 'owner_user_id,entity_type,entity_key' });
                     if (error) throw error;
                     return entityKey;
                 },
@@ -2108,8 +2113,9 @@
                         : (entityType === 'sample' ? this.getSampleKey(itemOrKey) : this.getCatalogKey(itemOrKey));
                     if (!entityKey) return;
                     const { error } = await supabaseClient
-                        .from('reference_deleted_registry')
+                        .from('reference_user_deleted_registry')
                         .delete()
+                        .eq('owner_user_id', this.getCurrentUserId())
                         .eq('entity_type', entityType)
                         .eq('entity_key', entityKey);
                     if (error) throw error;
@@ -2140,9 +2146,10 @@
                         } catch (_) {}
 
                         const { data, error } = await supabaseClient
-                            .from('reference_app_state')
+                            .from('reference_user_app_state')
                             .select('deleted_samples')
                             .eq('id', 1)
+                            .eq('owner_user_id', this.getCurrentUserId())
                             .maybeSingle();
 
                         if (error) throw error;
@@ -2150,9 +2157,10 @@
                         const serverItems = Array.isArray(data?.deleted_samples) ? data.deleted_samples : [];
 
                         const { data: permanentData, error: permanentError } = await supabaseClient
-                            .from('reference_app_state')
+                            .from('reference_user_app_state')
                             .select('permanently_deleted_samples')
                             .eq('id', 1)
+                            .eq('owner_user_id', this.getCurrentUserId())
                             .maybeSingle();
 
                         if (permanentError) throw permanentError;
@@ -2200,13 +2208,15 @@
                 async createStateSnapshot(reason = 'automatic') {
                     try {
                         const { data: current, error: readError } = await supabaseClient
-                            .from('reference_app_state')
+                            .from('reference_user_app_state')
                             .select('catalog,samples,deleted_samples,deleted_catalog,permanently_deleted_samples,app_data_version')
                             .eq('id', 1)
+                            .eq('owner_user_id', this.getCurrentUserId())
                             .maybeSingle();
                         if (readError) throw readError;
                         if (!current) return;
-                        await supabaseClient.from('reference_app_state_history').insert({
+                        await supabaseClient.from('reference_user_app_state_history').insert({
+                            owner_user_id: this.getCurrentUserId(),
                             state_id: 1,
                             catalog: Array.isArray(current.catalog) ? current.catalog : [],
                             samples: Array.isArray(current.samples) ? current.samples : [],
@@ -2231,9 +2241,10 @@
                         }
 
                         const { data, error } = await supabaseClient
-                            .from('reference_app_state')
+                            .from('reference_user_app_state')
                             .select('catalog,samples,deleted_samples,deleted_catalog,permanently_deleted_samples,app_data_version')
                             .eq('id', 1)
+                            .eq('owner_user_id', this.getCurrentUserId())
                             .maybeSingle();
 
                         if (error) throw error;
@@ -2360,8 +2371,9 @@
                         }
 
                         if (!data) {
-                            // Only seed a brand-new shared state row. Never seed/overwrite an
-                            // existing shared row from browser-local data during refresh.
+                            // A first login gets a private state row containing only the master
+                            // catalog. Existing shared legacy data is intentionally left untouched
+                            // so it cannot leak into another user's account.
                             await this.persistAppState('initial-seed');
                         }
 
@@ -2388,8 +2400,8 @@
                         return false;
                     }
                     try {
-                        const { data: current, error: readError } = await supabaseClient.from('reference_app_state')
-                            .select('catalog,samples,deleted_samples,deleted_catalog,permanently_deleted_samples,app_data_version').eq('id',1).maybeSingle();
+                        const { data: current, error: readError } = await supabaseClient.from('reference_user_app_state')
+                            .select('catalog,samples,deleted_samples,deleted_catalog,permanently_deleted_samples,app_data_version').eq('id',1).eq('owner_user_id', this.getCurrentUserId()).maybeSingle();
                         if (readError) throw readError;
 
                         const deletionRegistry = await this.loadDeletedRegistry();
@@ -2434,8 +2446,12 @@
 
                         const serverSamples = (Array.isArray(current?.samples)?current.samples:[]).filter(x=>!ds.has(this.getSampleKey(x)));
                         const serverCatalog = (Array.isArray(current?.catalog)?current.catalog:[]).filter(x=>!dc.has(this.getCatalogKey(x)));
-                        const mergedSamples = this.mergeSamplesSafely(serverSamples, (this.samples||[]).filter(x=>!ds.has(this.getSampleKey(x))));
-                        const mergedCatalog = (this.productCatalog||[]).filter(x=>!dc.has(this.getCatalogKey(x)));
+                        const mergedSamples = reason === 'initial-seed' && !current
+                            ? []
+                            : this.mergeSamplesSafely(serverSamples, (this.samples||[]).filter(x=>!ds.has(this.getSampleKey(x))));
+                        const mergedCatalog = reason === 'initial-seed' && !current
+                            ? (Array.isArray(window.MASTER_CATALOG_SEED) ? [...window.MASTER_CATALOG_SEED] : [])
+                            : (this.productCatalog||[]).filter(x=>!dc.has(this.getCatalogKey(x)));
 
                         if (serverSamples.length > mergedSamples.length && !reason.startsWith('delete-') && !reason.startsWith('restore-')) {
                             this.samples = serverSamples;
@@ -2445,7 +2461,8 @@
                         }
 
                         await this.createStateSnapshot('before-save');
-                        const { error } = await supabaseClient.from('reference_app_state').upsert({
+                        const { error } = await supabaseClient.from('reference_user_app_state').upsert({
+                            owner_user_id: this.getCurrentUserId(),
                             id:1, catalog:mergedCatalog, samples:mergedSamples,
                             deleted_samples:this.deletedSamples, deleted_catalog:this.deletedCatalog,
                             permanently_deleted_samples:this.permanentlyDeletedSamples,
@@ -2582,10 +2599,30 @@
                     return `${encoded}@reference-samples.local`;
                 },
                 async applySupabaseUser(user) {
-                    // Every authenticated account is a normal shared-data user by default.
+                    // Each authenticated account owns an independent dataset.
+                    // Never reuse another account's in-memory or browser-local data.
+                    const nextUserId = String(user?.id || '').trim();
+                    const userChanged = !!nextUserId && this.currentUserId !== nextUserId;
+                    this.currentUserId = nextUserId || null;
+                    this._supabaseInitialSyncCompleted = false;
+                    this._supabaseSyncInFlight = null;
+                    this.samples = [];
+                    this.deletedSamples = [];
+                    this.deletedCatalog = [];
+                    this.permanentlyDeletedSamples = [];
+                    this.productCatalog = Array.isArray(window.MASTER_CATALOG_SEED)
+                        ? [...window.MASTER_CATALOG_SEED]
+                        : [];
+                    try {
+                        localStorage.removeItem('QC_ACTIVE_SAMPLES_MASTER_RECORD');
+                        localStorage.removeItem('QC_DELETED_SAMPLES');
+                        localStorage.removeItem('QC_DELETED_CATALOG');
+                    } catch (_) {}
+                    if (userChanged) {
+                        this.currentSection = 'dashboard';
+                        this.currentTab = 'active';
+                    }
                     // Only an explicit server-side admin role may open the developer dashboard.
-                    // app_metadata is used here because user_metadata is user-editable and must
-                    // never be trusted for authorization.
                     const requestedRole = user?.app_metadata?.reference_role || user?.app_metadata?.role;
                     const role = requestedRole === 'admin' ? 'admin' : 'user';
                     const displayName = user?.user_metadata?.display_name || user?.user_metadata?.username || user?.email || 'User';
@@ -3672,9 +3709,10 @@
                     // Verify that the tombstone is actually durable in Supabase.
                     try {
                         const { data: verifyData, error: verifyError } = await supabaseClient
-                            .from('reference_app_state')
+                            .from('reference_user_app_state')
                             .select('samples,deleted_samples')
                             .eq('id', 1)
+                            .eq('owner_user_id', this.getCurrentUserId())
                             .maybeSingle();
                         if (verifyError) throw verifyError;
                         const key = this.getSampleKey(deletedItem);

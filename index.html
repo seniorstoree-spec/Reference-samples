@@ -3994,10 +3994,13 @@
                         }
 
                         const exportData = [];
-                        
+
                         this.filteredSamples.forEach((sample, idx) => {
                             const search = (sample.productName || '').trim().toLowerCase();
-                            const catalogItem = this.productCatalog.find(p => p.name.trim().toLowerCase() === search || this.t(p.name).trim().toLowerCase() === search);
+                            const catalogItem = this.productCatalog.find(p =>
+                                p.name.trim().toLowerCase() === search ||
+                                this.t(p.name).trim().toLowerCase() === search
+                            );
 
                             const serialNum = (catalogItem && catalogItem.serial != null) ? catalogItem.serial : (idx + 1);
                             const expMonth = (catalogItem && catalogItem.expMonth != null) ? catalogItem.expMonth : '';
@@ -4006,7 +4009,65 @@
                             const inspectionResult = this.getSampleInspectionResult(sample);
                             const lastInspDate = this.getLastInspectionDateFormatted(sample);
                             const nextInspDate = this.getNextInspectionDateFormatted(sample);
-                            
+
+                            // IMPORTANT: notes/problems are stored on each inspection record,
+                            // not only on sample.notes. Export every recorded inspection note,
+                            // rejection reason, issue category and defect tag so problem samples
+                            // keep the user's full observations in Excel.
+                            const inspections = Array.isArray(sample.inspections) ? sample.inspections : [];
+                            const recordedInspections = inspections.filter(insp =>
+                                insp && (
+                                    insp.result ||
+                                    insp.notes ||
+                                    insp.rejectionReason ||
+                                    insp.issueCategory ||
+                                    (Array.isArray(insp.defectTags) && insp.defectTags.length)
+                                )
+                            );
+
+                            const inspectionNotes = recordedInspections.map((insp, inspectionIndex) => {
+                                const stage = insp.stage || ('فحص ' + (inspectionIndex + 1));
+                                const testedDate = insp.testedDate ? this.formatDate(insp.testedDate) : '';
+                                const result = insp.result ? this.t(insp.result) : '';
+                                const category = insp.issueCategory ? this.t(insp.issueCategory) : '';
+                                const defects = Array.isArray(insp.defectTags)
+                                    ? insp.defectTags.map(tag => this.t(tag)).filter(Boolean).join('، ')
+                                    : '';
+                                const notes = insp.notes || '';
+                                const rejectionReason = insp.rejectionReason || '';
+
+                                const lines = [
+                                    'المرحلة: ' + stage,
+                                    testedDate ? 'تاريخ الفحص: ' + testedDate : '',
+                                    result ? 'النتيجة: ' + result : '',
+                                    category ? 'تصنيف المشكلة: ' + category : '',
+                                    defects ? 'العيوب: ' + defects : '',
+                                    notes ? 'ملاحظات الفحص: ' + notes : '',
+                                    rejectionReason ? 'سبب الرفض: ' + rejectionReason : ''
+                                ].filter(Boolean);
+
+                                return lines.join(' | ');
+                            }).join('\n');
+
+                            const allIssueCategories = [...new Set(
+                                recordedInspections
+                                    .map(insp => insp.issueCategory ? this.t(insp.issueCategory) : '')
+                                    .filter(Boolean)
+                            )].join('، ');
+
+                            const allDefects = [...new Set(
+                                recordedInspections.flatMap(insp =>
+                                    Array.isArray(insp.defectTags)
+                                        ? insp.defectTags.map(tag => this.t(tag)).filter(Boolean)
+                                        : []
+                                )
+                            )].join('، ');
+
+                            const allRejectionReasons = recordedInspections
+                                .map(insp => insp.rejectionReason || '')
+                                .filter(Boolean)
+                                .join('\n');
+
                             exportData.push({
                                 "م": serialNum,
                                 "اسم الصنف": this.t(sample.productName) || sample.productName || '',
@@ -4017,17 +4078,22 @@
                                 "رقم التشغيلة": sample.batchNumber || '',
                                 "عدد العينات": sample.sampleCount || 1,
                                 "نتيجة الفحص": inspectionResult,
+                                "تصنيف المشكلة": allIssueCategories,
+                                "العيوب": allDefects,
                                 "آخر فحص": lastInspDate === '-' ? '' : lastInspDate,
                                 "الفحص القادم": nextInspDate === this.t('noNextInsp') ? '' : nextInspDate,
-                                "ملاحظات": sample.notes || ''
+                                "ملاحظات العينة": sample.notes || '',
+                                "ملاحظات ونتائج الفحوصات": inspectionNotes,
+                                "أسباب الرفض": allRejectionReasons
                             });
                         });
 
                         const worksheet = window.XLSX.utils.json_to_sheet(exportData);
-                        
-                        if(!worksheet['!views']) worksheet['!views'] = [];
+
+                        if (!worksheet['!views']) worksheet['!views'] = [];
                         worksheet['!views'].push({ rightToLeft: true });
 
+                        // Make the notes/problem columns wide enough to be usable in Excel.
                         worksheet['!cols'] = [
                             { wch: 8 },
                             { wch: 25 },
@@ -4038,23 +4104,29 @@
                             { wch: 20 },
                             { wch: 12 },
                             { wch: 20 },
+                            { wch: 20 },
+                            { wch: 30 },
                             { wch: 18 },
                             { wch: 18 },
-                            { wch: 25 }
+                            { wch: 30 },
+                            { wch: 60 },
+                            { wch: 45 }
                         ];
 
                         const workbook = window.XLSX.utils.book_new();
                         window.XLSX.utils.book_append_sheet(workbook, worksheet, "Active_Samples");
-                        
-                        window.XLSX.writeFile(workbook, `QC_Retention_Samples_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
-                        
-                        this.showToast(this.lang === 'ar' ? 'تم تصدير الملف بنجاح' : 'File exported successfully!');
-                    } catch(err) {
+
+                        window.XLSX.writeFile(
+                            workbook,
+                            `QC_Retention_Samples_Export_${new Date().toISOString().split('T')[0]}.xlsx`
+                        );
+
+                        this.showToast(this.lang === 'ar' ? 'تم تصدير الملف بنجاح مع جميع الملاحظات وبيانات المشكلات' : 'File exported successfully with all notes and issue details!');
+                    } catch (err) {
                         console.error('Export Error:', err);
                         alert('Error during export: ' + err.message);
                     }
-                }
-            }
+                }            }
         }).mount('#app')
     </script>
 </body>

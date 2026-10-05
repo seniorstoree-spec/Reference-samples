@@ -624,13 +624,13 @@
                     </thead>
                     <tbody>
                         <tr v-if="filteredSamples.length === 0">
-                            <td colspan="12" class="p-8 text-center text-gray-500 italic">{{ t('emptyTable') }}</td>
+                            <td colspan="11" class="p-8 text-center text-gray-500 italic">{{ t('emptyTable') }}</td>
                         </tr>
                         
                         <template v-for="sample in filteredSamples" :key="sample.id">
                             <!-- CRITICAL ALERT BANNER -->
                             <tr v-if="hasFoodSafetyIssue(sample)" class="bg-red-600 text-white border-b border-red-700">
-                                <td colspan="12" class="px-4 py-2 text-sm font-bold shadow-inner">
+                                <td colspan="11" class="px-4 py-2 text-sm font-bold shadow-inner">
                                     <div class="flex items-center">
                                         <svg class="w-6 h-6 me-3 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                                         {{ t('criticalHoldTitle') }}
@@ -647,8 +647,7 @@
                                     </button>
                                 </td>
                                 <td class="p-3 font-mono font-bold text-blue-900" dir="ltr">{{ sample.batchNumber }}</td>
-                                <td class="p-3 text-start"><span class="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs font-bold border border-gray-200">{{ sample.sampleCount || 1 }} {{ t('sampleUnit') }}</span></td>
-                                <td class="p-3 font-bold text-gray-800"><span class="sample-name-one-line">{{ t(sample.productName) }}</span></td>
+                                                                <td class="p-3 font-bold text-gray-800"><span class="sample-name-one-line">{{ t(sample.productName) }}</span></td>
                                 <td class="p-3 font-mono text-sm" dir="ltr">{{ formatDate(sample.productionDate) }}</td>
                                 <td class="p-3 font-mono text-sm" dir="ltr">{{ formatDate(sample.expirationDate) }}</td>
                                 <td class="p-3"><span class="font-bold">{{ calculateTotalShelfLife(sample.productionDate, sample.expirationDate) }}</span> {{ t('days') }}</td>
@@ -1299,10 +1298,6 @@
             "criticalHoldTitle": { en: "CRITICAL: Batch Hold Recommended for Quality Investigation", ar: "تحذير: اشتباه سلامة غذاء - يرجى حجز التشغيلة (Hold)" },
             "holdStatusBadge": { en: "HOLD", ar: "حجز (Hold)" },
             "newSampleIntake": { en: "New Sample Intake", ar: "استلام عينة جديدة" },
-                        "sampleCount": { en: "Sample Quantity *", ar: "عدد العينات / كمية العينات *" },
-            "sampleCountPlaceholder": { en: "Enter sample quantity", ar: "أدخل عدد العينات المأخوذة" },
-            "sampleUnit": { en: "Units", ar: "عينات" },
-            "colSampleCount": { en: "Qty", ar: "عدد العينات" },
 "productName": { en: "Product Name *", ar: "اسم الصنف *" },
             "selectProduct": { en: "Select a product", ar: "اختر صنفاً" },
             "batchNumber": { en: "Batch Number", ar: "رقم التشغيلة" },
@@ -4259,7 +4254,6 @@
                                 "سنه": expYear,
                                 "تاريخ الإنتاج": this.formatDate(sample.productionDate),
                                 "رقم التشغيلة": sample.batchNumber || '',
-                                "عدد العينات": sample.sampleCount || 1,
                                 "نتيجة الفحص": inspectionResult,
                                 "تصنيف المشكلة": allIssueCategories,
                                 "العيوب": allDefects,
@@ -4285,7 +4279,6 @@
                             { wch: 10 },
                             { wch: 18 },
                             { wch: 20 },
-                            { wch: 12 },
                             { wch: 20 },
                             { wch: 20 },
                             { wch: 30 },

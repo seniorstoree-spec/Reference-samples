@@ -1601,6 +1601,11 @@
             
 
             async mounted() {
+                // Browser lifecycle recovery: keep the SPA visible and reactive when the
+                // user switches to another website/app and then returns to this tab.
+                this._pageReturnHandler = () => this.handlePageReturn();
+                document.addEventListener('visibilitychange', this._pageReturnHandler);
+                window.addEventListener('pageshow', this._pageReturnHandler);
                 // Authentication is required before entering the application.
                 // A persisted Supabase session may restore the user automatically.
                 this.appView = 'login';
@@ -1731,6 +1736,16 @@
                 });
                 this.$nextTick(() => {
                     this.updateCharts();
+                });
+            },
+            beforeUnmount() {
+                if (this._pageReturnHandler) {
+                    document.removeEventListener('visibilitychange', this._pageReturnHandler);
+                    window.removeEventListener('pageshow', this._pageReturnHandler);
+                    this._pageReturnHandler = null;
+                }
+                Object.values(this.chartInstances || {}).forEach(chart => {
+                    try { chart?.destroy?.(); } catch (_) {}
                 });
             },
             watch: {
@@ -4042,6 +4057,38 @@
                     sample.updatedAt = new Date().toISOString();
                     await this.persistAppState('inspection-update');
                     this.closeModal();
+                },
+                async handlePageReturn() {
+                    // Browser tabs can be suspended/frozen while the user visits another
+                    // website or application. When the tab becomes visible again, Vue may
+                    // still hold the correct state but the DOM can be stale/blank.
+                    // Recover the existing Vue render first, then re-sync only if the
+                    // authenticated dataset is unexpectedly empty.
+                    if (document.visibilityState !== 'visible') return;
+
+                    try {
+                        if (!this.auth?.isAuthenticated || !this.currentUserId) return;
+
+                        this.$forceUpdate();
+
+                        await this.$nextTick();
+
+                        // If the browser discarded the in-memory dataset while the tab was
+                        // suspended, restore it from this user's Supabase row. This never
+                        // writes an empty local state over the server.
+                        if (this._supabaseInitialSyncCompleted && this.samples.length === 0) {
+                            await this.initializeSupabaseSync();
+                            await this.$nextTick();
+                        }
+
+                        if (this.currentSection === 'dashboard') {
+                            this.$nextTick(() => this.updateCharts());
+                        }
+                    } catch (e) {
+                        console.warn('[Page Return] UI recovery skipped:', e);
+                        // A temporary browser lifecycle/render issue must never log the user
+                        // out or replace the current data with an empty state.
+                    }
                 },
                 async navigateSection(section) {
                     // Keep every sidebar item inside the main QC application.

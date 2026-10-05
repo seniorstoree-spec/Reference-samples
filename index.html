@@ -4013,6 +4013,27 @@
                         sample.statusOverride = null;
                         sample.terminalTimestamp = null;
                     }
+
+                    // The End-of-Life (100%) milestone is the final shelf-life checkpoint.
+                    // Completing this inspection must archive the sample automatically,
+                    // regardless of which result was selected in the result dropdown.
+                    // This makes the workflow date/stage driven instead of depending on
+                    // the user remembering to select "Shelf Life Expired".
+                    const normalizedStage = String(insp.stage || '').toLowerCase().replace(/\s+/g, '');
+                    const isEndOfLifeMilestone =
+                        normalizedStage.includes('end-of-life') ||
+                        normalizedStage.includes('endoflife') ||
+                        normalizedStage.includes('100%') ||
+                        normalizedStage.includes('نهايهالعمر') ||
+                        normalizedStage.includes('نهايةالعمر') ||
+                        normalizedStage.includes('نهايهالصلاحيه') ||
+                        normalizedStage.includes('نهايةالصلاحية');
+
+                    if (isEndOfLifeMilestone && insp.testedDate && insp.result) {
+                        sample.statusOverride = 'Archived / Expired';
+                        sample.terminalTimestamp = new Date(insp.testedDate + 'T00:00:00').toISOString();
+                    }
+
                     sample.lastInspectionDate = this.modalForm.testedDate || new Date().toISOString().split('T')[0];
                     // Mark the sample as newer than the server copy so the edited inspection
                     // cannot be overwritten by the older server record during synchronization.

@@ -997,8 +997,7 @@
                                             <button @click="permanentlyDeleteSample(item)" class="bg-red-50 text-red-700 border border-red-200 px-4 py-2 rounded-lg font-bold text-xs hover:bg-red-100 transition-colors whitespace-nowrap">حذف نهائي</button>
                                         </div>
                                     </td>
-                                </tr>
-                            </tbody>
+                                </tr>                            </tbody>
                         </table>
                     </div>
                 </div>
@@ -1997,8 +1996,7 @@
                     const requiresNotes = this.modalForm.result === 'Accepted with Notes';
                     const requiresReject = this.modalForm.result === 'Rejected';
                     
-                    if (requiresNotes || requiresReject) {
-                        if (!this.modalForm.issueCategory) return false;
+                    if (requiresNotes || requiresReject) {                        if (!this.modalForm.issueCategory) return false;
                     }
 
                     if (requiresNotes && !this.modalForm.notes.trim()) return false;
@@ -2702,9 +2700,12 @@
                         const mergedSamples = reason === 'initial-seed' && !current
                             ? []
                             : this.mergeSamplesSafely(serverSamples, (this.samples||[]).filter(x=>!ds.has(this.getSampleKey(x))));
+                        const preferLocalCatalogProtectedFields = options.preferLocalCatalogProtectedFields === true || reason === 'catalog-shelf-life-update' || reason === 'catalog-import' || reason === 'catalog-add';
                         const mergedCatalog = reason === 'initial-seed' && !current
                             ? (Array.isArray(window.MASTER_CATALOG_SEED) ? [...window.MASTER_CATALOG_SEED] : [])
-                            : this.mergeCatalogSafely(serverCatalog, (this.productCatalog||[]).filter(x=>!dc.has(this.getCatalogKey(x))));
+                            : this.mergeCatalogSafely(serverCatalog, (this.productCatalog||[]).filter(x=>!dc.has(this.getCatalogKey(x))), {
+                                preferLocalProtectedFields: preferLocalCatalogProtectedFields
+                            });
 
                         if (serverSamples.length > mergedSamples.length && !reason.startsWith('delete-') && !reason.startsWith('restore-')) {
                             this.samples = serverSamples;
@@ -2997,8 +2998,7 @@
                             });
                             if (error) {
                                 console.error('[Auth] Signup error:', error);
-                                this.auth.error = error.message || (this.lang === 'ar' ? 'تعذر إنشاء الحساب' : 'Could not create account');
-                                return;
+                                this.auth.error = error.message || (this.lang === 'ar' ? 'تعذر إنشاء الحساب' : 'Could not create account');                                return;
                             }
                             this.loginForm.password = '';
                             this.isSignupMode = false;
@@ -3352,7 +3352,7 @@
                                 imported++;
                             }
                             if (imported > 0) {
-                                this.persistAppState();
+                                await this.persistAppState('catalog-import', { preferLocalCatalogProtectedFields: true });
                                 this.showToast(this.lang === 'ar' ? `استوردت ${imported} صنفاً بنجاح` : `Imported ${imported} products`);
                             } else {
                                 this.showToast(this.lang === 'ar' ? 'لم يتم استيراد أي صنف جديد' : 'No new products imported', 'error');
@@ -3512,7 +3512,7 @@
                     const previous = this.productCatalog[actualIndex];
                     this.productCatalog[actualIndex] = updated;
 
-                    const saved = await this.persistAppState('catalog-shelf-life-update');
+                    const saved = await this.persistAppState('catalog-shelf-life-update', { preferLocalCatalogProtectedFields: true });
                     if (!saved) {
                         this.productCatalog[actualIndex] = previous;
                         this.showToast(this.lang === 'ar' ? 'تعذر حفظ تعديل الصلاحية على الخادم، وتم إرجاع التعديل.' : 'Could not save the shelf-life change to the server; the edit was reverted.', 'error');
@@ -3997,8 +3997,7 @@
                     if (insp.testedDate && insp.inspectorName && insp.result) return 'Completed';
                     if (!insp.scheduledDate) return 'Scheduled';
                     const today = new Date(); today.setHours(0,0,0,0);
-                    const schedDate = new Date(insp.scheduledDate); schedDate.setHours(0,0,0,0);
-                    const diff = schedDate.getTime() - today.getTime();
+                    const schedDate = new Date(insp.scheduledDate); schedDate.setHours(0,0,0,0);                    const diff = schedDate.getTime() - today.getTime();
                     if (diff === 0) return 'Due Today';
                     if (diff < 0) return 'Overdue';
                     return 'Scheduled';

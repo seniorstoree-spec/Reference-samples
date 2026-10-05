@@ -2074,6 +2074,42 @@
             methods: {
                 getSampleKey(sample) { return String(sample?.id ?? sample?.sampleId ?? sample?.operationalNumber ?? '').trim(); },
                 getCatalogKey(item) { return String(item?.id ?? item?.name ?? '').trim().toLowerCase(); },
+                async loadDeletedRegistry() {
+                    if (!supabaseClient) return [];
+                    const { data, error } = await supabaseClient
+                        .from('reference_deleted_registry')
+                        .select('entity_type,entity_key,payload,deleted_at,deleted_by,is_permanent');
+                    if (error) throw error;
+                    return Array.isArray(data) ? data : [];
+                },
+                async upsertDeletedRegistry(entityType, item, isPermanent = false) {
+                    const entityKey = entityType === 'sample' ? this.getSampleKey(item) : this.getCatalogKey(item);
+                    if (!entityKey) throw new Error('Cannot create deletion key');
+                    const { error } = await supabaseClient
+                        .from('reference_deleted_registry')
+                        .upsert({
+                            entity_type: entityType,
+                            entity_key: entityKey,
+                            payload: item,
+                            deleted_at: item.deletedAt || new Date().toISOString(),
+                            deleted_by: item.deletedBy || this.auth.username || this.auth.email || 'user',
+                            is_permanent: !!isPermanent
+                        }, { onConflict: 'entity_type,entity_key' });
+                    if (error) throw error;
+                    return entityKey;
+                },
+                async removeDeletedRegistry(entityType, itemOrKey) {
+                    const entityKey = typeof itemOrKey === 'string'
+                        ? itemOrKey
+                        : (entityType === 'sample' ? this.getSampleKey(itemOrKey) : this.getCatalogKey(itemOrKey));
+                    if (!entityKey) return;
+                    const { error } = await supabaseClient
+                        .from('reference_deleted_registry')
+                        .delete()
+                        .eq('entity_type', entityType)
+                        .eq('entity_key', entityKey);
+                    if (error) throw error;
+                },
                 mergeDeletedItems(serverItems, localItems) {
                     const byKey = new Map();
                     [...(Array.isArray(serverItems) ? serverItems : []), ...(Array.isArray(localItems) ? localItems : [])].forEach(item => {
@@ -2199,6 +2235,32 @@
                         const localCatalog = Array.isArray(this.productCatalog) ? this.productCatalog : [];
                         const localSamples = Array.isArray(this.samples) ? this.samples : [];
 
+                        // The deletion registry is the authoritative, independent tombstone store.
+                        // It cannot be accidentally erased by a normal state upsert.
+                        const deletionRegistry = await this.loadDeletedRegistry();
+                        const registrySamples = deletionRegistry
+                            .filter(x => x.entity_type === 'sample')
+                            .map(x => x.payload)
+                            .filter(Boolean);
+                        const registryCatalog = deletionRegistry
+                            .filter(x => x.entity_type === 'catalog')
+                            .map(x => x.payload)
+                            .filter(Boolean);
+                        this.deletedSamples = this.mergeDeletedItems(
+                            Array.isArray(data?.deleted_samples) ? data.deleted_samples : [],
+                            this.mergeDeletedItems(this.deletedSamples, registrySamples)
+                        );
+                        this.deletedCatalog = this.mergeDeletedItems(
+                            Array.isArray(data?.deleted_catalog) ? data.deleted_catalog : [],
+                            this.mergeDeletedItems(this.deletedCatalog, registryCatalog)
+                        );
+                        const registrySampleKeys = new Set(
+                            deletionRegistry.filter(x => x.entity_type === 'sample').map(x => String(x.entity_key || '')).filter(Boolean)
+                        );
+                        const registryCatalogKeys = new Set(
+                            deletionRegistry.filter(x => x.entity_type === 'catalog').map(x => String(x.entity_key || '')).filter(Boolean)
+                        );
+
                         if (data) {
                             // Load deleted records explicitly before filtering active records.
                             // IMPORTANT: a deletion tombstone is authoritative. If an old active
@@ -2236,9 +2298,13 @@
                             localStorage.setItem('QC_DELETED_CATALOG', JSON.stringify(this.deletedCatalog));
                             const deletedSampleKeys = new Set([
                                 ...deletedSampleKeysForSync,
-                                ...this.permanentlyDeletedSamples.map(x=>String(x.key || ''))
+                                ...this.permanentlyDeletedSamples.map(x=>String(x.key || '')),
+                                ...registrySampleKeys
                             ].filter(Boolean));
-                            const deletedCatalogKeys = new Set(this.deletedCatalog.map(x=>this.getCatalogKey(x)).filter(Boolean));
+                            const deletedCatalogKeys = new Set([
+                                ...this.deletedCatalog.map(x=>this.getCatalogKey(x)).filter(Boolean),
+                                ...registryCatalogKeys
+                            ].filter(Boolean));
 // Never replace a larger local sample set with a smaller server set.
                             // This protects data during refreshes and deployments.
                             const mergedSamples = this.mergeSamplesSafely(
@@ -2308,6 +2374,10 @@
                             .select('catalog,samples,deleted_samples,deleted_catalog,permanently_deleted_samples,app_data_version').eq('id',1).maybeSingle();
                         if (readError) throw readError;
 
+                        const deletionRegistry = await this.loadDeletedRegistry();
+                        const registrySamples = deletionRegistry.filter(x => x.entity_type === 'sample').map(x => x.payload).filter(Boolean);
+                        const registryCatalog = deletionRegistry.filter(x => x.entity_type === 'catalog').map(x => x.payload).filter(Boolean);
+
                         const restoredSampleKey = reason === 'restore-sample'
                             ? String(options.restoredSampleKey || '')
                             : '';
@@ -2331,11 +2401,18 @@
                             if (key) permanentByKey.set(key, item);
                         });
                         this.permanentlyDeletedSamples = Array.from(permanentByKey.values());
+                        this.deletedSamples = this.mergeDeletedItems(this.deletedSamples, registrySamples);
+                        this.deletedCatalog = this.mergeDeletedItems(this.deletedCatalog, registryCatalog);
+
                         const ds = new Set([
                             ...this.deletedSamples.map(x=>this.getSampleKey(x)),
-                            ...this.permanentlyDeletedSamples.map(x=>String(x.key || ''))
+                            ...this.permanentlyDeletedSamples.map(x=>String(x.key || '')),
+                            ...deletionRegistry.filter(x => x.entity_type === 'sample').map(x => String(x.entity_key || ''))
                         ].filter(Boolean));
-                        const dc = new Set(this.deletedCatalog.map(x=>this.getCatalogKey(x)).filter(Boolean));
+                        const dc = new Set([
+                            ...this.deletedCatalog.map(x=>this.getCatalogKey(x)),
+                            ...deletionRegistry.filter(x => x.entity_type === 'catalog').map(x => String(x.entity_key || ''))
+                        ].filter(Boolean));
 
                         const serverSamples = (Array.isArray(current?.samples)?current.samples:[]).filter(x=>!ds.has(this.getSampleKey(x)));
                         const serverCatalog = (Array.isArray(current?.catalog)?current.catalog:[]).filter(x=>!dc.has(this.getCatalogKey(x)));
@@ -3039,8 +3116,16 @@
                 async deleteCatalogProduct(index) {
                     if(!confirm(this.lang==='ar'?'هل تريد نقل هذا الصنف إلى المحذوفات؟':'Move this product to Deleted Items?'))return;
                     const item=this.productCatalog[index]; if(!item)return;
+                    const deletedItem = {...item,deletedAt:new Date().toISOString(),deletedBy:this.auth.username||this.auth.email||'user'};
+                    try {
+                        await this.upsertDeletedRegistry('catalog', deletedItem, false);
+                    } catch (registryError) {
+                        console.error('[Deleted Registry] Catalog tombstone failed:', registryError);
+                        this.showToast(this.lang==='ar'?'تعذر تثبيت حذف الصنف على الخادم.':'Could not persist the product deletion.','error');
+                        return;
+                    }
                     this.productCatalog.splice(index,1);
-                    this.deletedCatalog.push({...item,deletedAt:new Date().toISOString(),deletedBy:this.auth.username||this.auth.email||'user'});
+                    this.deletedCatalog = this.mergeDeletedItems(this.deletedCatalog, [deletedItem]);
                     await this.persistAppState('delete-catalog');
                     this.showToast(this.lang==='ar'?'تم نقل الصنف إلى المحذوفات':'Product moved to Deleted Items');
                 },
@@ -3049,6 +3134,13 @@
                     if(this.productCatalog.some(x=>this.getCatalogKey(x)===key)){this.showToast(this.lang==='ar'?'الصنف موجود بالفعل':'Product already exists','error');return;}
                     this.deletedCatalog=this.deletedCatalog.filter(x=>this.getCatalogKey(x)!==key);
                     const {deletedAt,deletedBy,...product}=item;
+                    try {
+                        await this.removeDeletedRegistry('catalog', key);
+                    } catch (registryError) {
+                        console.error('[Deleted Registry] Catalog restore failed:', registryError);
+                        this.showToast(this.lang==='ar'?'تعذر استعادة الصنف على الخادم.':'Could not restore the product on the server.','error');
+                        return;
+                    }
                     this.productCatalog.push(product);
                     await this.persistAppState('restore-catalog');
                     this.showToast(this.lang==='ar'?'تمت استعادة الصنف':'Product restored');
@@ -3056,6 +3148,13 @@
                 async permanentlyDeleteCatalog(item) {
                     if(!window.confirm(this.lang==='ar'?'سيتم حذف الصنف نهائياً ولا يمكن استعادته. هل تريد المتابعة؟':'Permanently delete this product?'))return;
                     const key=this.getCatalogKey(item);
+                    try {
+                        await this.upsertDeletedRegistry('catalog', item, true);
+                    } catch (registryError) {
+                        console.error('[Deleted Registry] Permanent catalog deletion failed:', registryError);
+                        this.showToast(this.lang==='ar'?'تعذر تثبيت الحذف النهائي على الخادم.':'Could not persist permanent product deletion on the server.','error');
+                        return;
+                    }
                     this.deletedCatalog=this.deletedCatalog.filter(x=>this.getCatalogKey(x)!==key);
                     await this.persistAppState('permanent-delete-catalog');
                     this.showToast(this.lang==='ar'?'تم الحذف النهائي':'Permanently deleted');
@@ -3530,6 +3629,17 @@
                     localStorage.setItem('QC_DELETED_SAMPLES', JSON.stringify(this.deletedSamples));
                     localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(this.samples));
 
+                    try {
+                        await this.upsertDeletedRegistry('sample', deletedItem, false);
+                    } catch (registryError) {
+                        console.error('[Deleted Registry] Sample tombstone failed:', registryError);
+                        this.samples.splice(i, 0, sample);
+                        this.deletedSamples = this.deletedSamples.filter(x => this.getSampleKey(x) !== this.getSampleKey(deletedItem));
+                        localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(this.samples));
+                        this.showToast(this.lang==='ar'?'تعذر تثبيت الحذف على الخادم. لم يتم فقد العينة.':'Could not persist the deletion. The sample was not removed.','error');
+                        return;
+                    }
+
                     const saved = await this.persistAppState('delete-sample');
                     if (!saved) {
                         this.showToast(this.lang==='ar'?'تعذر حفظ الحذف على الخادم. أعد المحاولة قبل تحديث الصفحة.':'The deletion could not be saved to the server. Please retry before refreshing.','error');
@@ -3565,6 +3675,15 @@
                     this.deletedSamples=this.deletedSamples.filter(x=>this.getSampleKey(x)!==key);
                     this.permanentlyDeletedSamples = this.permanentlyDeletedSamples.filter(x => String(x.key || '') !== key);
                     const {deletedAt,deletedBy,...sample}=item;
+                    try {
+                        await this.removeDeletedRegistry('sample', key);
+                    } catch (registryError) {
+                        console.error('[Deleted Registry] Sample restore failed:', registryError);
+                        this.deletedSamples.push(item);
+                        this.samples = this.samples.filter(x => this.getSampleKey(x) !== key);
+                        this.showToast(this.lang==='ar'?'تعذر استعادة العينة على الخادم.':'Could not restore the sample on the server.','error');
+                        return;
+                    }
                     this.samples.push(sample);
                     await this.persistAppState('restore-sample', { restoredSampleKey: key });
                     this.showToast(this.lang==='ar'?'تمت استعادة العينة':'Sample restored');
@@ -3575,6 +3694,17 @@
                     this.samples = this.samples.filter(x => this.getSampleKey(x) !== key);
                     this.deletedSamples=this.deletedSamples.filter(x=>this.getSampleKey(x)!==key);
                     if (key) {
+                        try {
+                            await this.upsertDeletedRegistry('sample', {
+                                ...item,
+                                deletedAt: item.deletedAt || new Date().toISOString(),
+                                deletedBy: this.auth.username || this.auth.email || 'user'
+                            }, true);
+                        } catch (registryError) {
+                            console.error('[Deleted Registry] Permanent sample deletion failed:', registryError);
+                            this.showToast(this.lang==='ar'?'تعذر تثبيت الحذف النهائي على الخادم.':'Could not persist permanent deletion on the server.','error');
+                            return;
+                        }
                         this.permanentlyDeletedSamples = this.permanentlyDeletedSamples.filter(x => String(x.key || '') !== key);
                         this.permanentlyDeletedSamples.push({
                             key,

@@ -904,16 +904,36 @@
                                     <span v-else class="font-bold text-gray-800">{{ t(item.name) }}</span>
                                 </td>
                                 <td class="p-4 text-center align-middle">
-                                    <span v-if="item.expMonth" class="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full text-xs font-bold">{{ item.expMonth }}</span>
-                                    <span v-else class="text-gray-400">-</span>
+                                    <template v-if="catalogEditingIndex === index">
+                                        <div class="flex items-center justify-center gap-1.5">
+                                            <input type="number" v-model.number="catalogEditingItem.shelfLifeValue" min="1" step="1" required
+                                                class="w-16 border border-purple-300 rounded p-1.5 text-center focus:ring-2 focus:ring-purple-500 text-xs font-bold">
+                                            <select v-model="catalogEditingItem.shelfLifeUnit"
+                                                class="w-16 border border-purple-300 rounded p-1.5 text-xs focus:ring-2 focus:ring-purple-500">
+                                                <option value="Days">يوم</option>
+                                                <option value="Months">شهر</option>
+                                                <option value="Years">سنة</option>
+                                            </select>
+                                        </div>
+                                    </template>
+                                    <template v-else>
+                                        <span v-if="item.expMonth" class="bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full text-xs font-bold">{{ item.expMonth }}</span>
+                                        <span v-else class="text-gray-400">-</span>
+                                    </template>
                                 </td>
                                 <td class="p-4 text-center align-middle">
-                                    <span v-if="item.expDay" class="bg-green-50 text-green-700 px-2.5 py-1 rounded-full text-xs font-bold">{{ item.expDay }}</span>
-                                    <span v-else class="text-gray-400">-</span>
+                                    <span v-if="catalogEditingIndex === index" class="text-gray-400 text-xs">—</span>
+                                    <template v-else>
+                                        <span v-if="item.expDay" class="bg-green-50 text-green-700 px-2.5 py-1 rounded-full text-xs font-bold">{{ item.expDay }}</span>
+                                        <span v-else class="text-gray-400">-</span>
+                                    </template>
                                 </td>
                                 <td class="p-4 text-center align-middle">
-                                    <span v-if="item.expYear" class="bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full text-xs font-bold">{{ item.expYear }}</span>
-                                    <span v-else class="text-gray-400">-</span>
+                                    <span v-if="catalogEditingIndex === index" class="text-gray-400 text-xs">—</span>
+                                    <template v-else>
+                                        <span v-if="item.expYear" class="bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full text-xs font-bold">{{ item.expYear }}</span>
+                                        <span v-else class="text-gray-400">-</span>
+                                    </template>
                                 </td>
                                 <td class="p-4 text-center align-middle">
                                     <div class="flex flex-wrap items-center justify-center gap-2">
@@ -1681,20 +1701,10 @@
                     }
                 }
 
-                // Migration: Sync all loaded samples with master catalog rules
+                // Existing samples are historical records. Changing the master catalog
+                // must NOT rewrite their stored expiration dates or inspection history.
+                // The catalog rule is applied only when a new sample is created.
                 let migrated = false;
-                this.samples.forEach(sample => {
-                    const catalogItem = this.productCatalog.find(c => c.name === sample.productName);
-                    if (catalogItem) {
-                        const expectedExp = new Date(sample.productionDate);
-                        expectedExp.setMonth(expectedExp.getMonth() + parseInt(catalogItem.shelfLifeMonths, 10));
-                        const expectedExpStr = expectedExp.toISOString().split('T')[0];
-                        if (sample.expirationDate !== expectedExpStr) {
-                            sample.expirationDate = expectedExpStr;
-                            migrated = true;
-                        }
-                    }
-                });
                 
                 // Migration: Generate milestones for existing samples that have an empty schedule
                 this.samples.forEach(sample => {
@@ -1786,9 +1796,13 @@
                     const search = this.form.productName.trim().toLowerCase();
                     const prod = this.productCatalog.find(i => i.name.trim().toLowerCase() === search || this.t(i.name).trim().toLowerCase() === search);
                     if (!prod) return this.form.customShelfLife || 6;
+                    if (prod.shelfLifeUnit === 'Days' || (prod.expDay && !prod.expMonth && !prod.expYear)) return 0;
+                    if (prod.shelfLifeUnit === 'Years' || (prod.expYear && !prod.expMonth)) {
+                        const years = parseInt(prod.expYear, 10) || Math.round((parseInt(prod.shelfLifeMonths, 10) || 12) / 12);
+                        return years * 12;
+                    }
                     if (prod.expMonth && !isNaN(parseInt(prod.expMonth, 10))) return parseInt(prod.expMonth, 10);
                     if (prod.shelfLifeMonths && !isNaN(parseInt(prod.shelfLifeMonths, 10))) return parseInt(prod.shelfLifeMonths, 10);
-                    if (prod.expYear && !isNaN(parseInt(prod.expYear, 10))) return parseInt(prod.expYear, 10) * 12;
                     return 6;
                 },
                 computedShelfLifeDisplay() {
@@ -3198,30 +3212,75 @@
                     this.persistAppState();
                 },
                 startCatalogEdit(index, item) {
+                    const unit = item.shelfLifeUnit ||
+                        (parseInt(item.expDay, 10) > 0 ? 'Days' :
+                         parseInt(item.expYear, 10) > 0 ? 'Years' : 'Months');
+                    let value = 1;
+                    if (unit === 'Days') {
+                        value = parseInt(item.expDay, 10) || Math.max(1, Math.round((parseInt(item.shelfLifeMonths, 10) || 1) * 30));
+                    } else if (unit === 'Years') {
+                        value = parseInt(item.expYear, 10) || Math.max(1, Math.round((parseInt(item.shelfLifeMonths, 10) || 12) / 12));
+                    } else {
+                        value = parseInt(item.expMonth, 10) || parseInt(item.shelfLifeMonths, 10) || 1;
+                    }
                     this.catalogEditingIndex = index;
-                    this.catalogEditingItem = { ...item };
+                    this.catalogEditingItem = { ...item, _originalName: item.name, shelfLifeValue: value, shelfLifeUnit: unit };
                 },
                 cancelCatalogEdit() {
                     this.catalogEditingIndex = -1;
                     this.catalogEditingItem = null;
                 },
-                saveCatalogEdit(index) {
-                    const newName = this.catalogEditingItem.name.trim();
+                async saveCatalogEdit(index) {
+                    if (!this.catalogEditingItem) return;
+                    const newName = String(this.catalogEditingItem.name || '').trim();
+                    const value = parseInt(this.catalogEditingItem.shelfLifeValue, 10);
+                    const unit = this.catalogEditingItem.shelfLifeUnit || 'Months';
+
                     if (!newName) return;
-                    
-                    // Check for duplicate excluding current
-                    const isDuplicate = this.productCatalog.some((p, i) => i !== index && p.name.trim().toLowerCase() === newName.toLowerCase());
+                    if (!Number.isFinite(value) || value < 1) {
+                        alert(this.lang === 'ar' ? 'أدخل مدة صلاحية صحيحة أكبر من صفر.' : 'Enter a valid shelf-life value greater than zero.');
+                        return;
+                    }
+                    if (!['Days', 'Months', 'Years'].includes(unit)) {
+                        alert(this.lang === 'ar' ? 'وحدة الصلاحية غير صحيحة.' : 'Invalid shelf-life unit.');
+                        return;
+                    }
+
+                    const originalName = String(this.catalogEditingItem._originalName || '').trim().toLowerCase();
+                    const actualIndex = this.productCatalog.findIndex(p => String(p?.name || '').trim().toLowerCase() === originalName);
+                    if (actualIndex < 0) {
+                        this.showToast(this.lang === 'ar' ? 'تعذر تحديد الصنف للتعديل.' : 'Could not locate the product to edit.', 'error');
+                        return;
+                    }
+
+                    const isDuplicate = this.productCatalog.some((p, i) =>
+                        i !== actualIndex && String(p?.name || '').trim().toLowerCase() === newName.toLowerCase()
+                    );
                     if (isDuplicate) {
                         alert(this.lang === 'ar' ? 'هذا الصنف موجود مسبقاً!' : 'This product already exists!');
                         return;
                     }
-                    
-                    // Update only the name; keep existing duration fields unchanged
-                    this.productCatalog[index].name = newName;
-                    // No changes to shelfLifeMonths, unit, or exclusive fields here
+
+                    const updated = { ...this.productCatalog[actualIndex], name: newName, shelfLifeUnit: unit };
+                    updated.expMonth = unit === 'Months' ? value : null;
+                    updated.expDay = unit === 'Days' ? value : null;
+                    updated.expYear = unit === 'Years' ? value : null;
+                    // Keep the existing canonical field compatible with the current app,
+                    // while the exact unit/value fields remain the source for date calculation.
+                    updated.shelfLifeMonths = unit === 'Days' ? Math.ceil(value / 30) : (unit === 'Years' ? value * 12 : value);
+
+                    const previous = this.productCatalog[actualIndex];
+                    this.productCatalog[actualIndex] = updated;
+
+                    const saved = await this.persistAppState('catalog-shelf-life-update');
+                    if (!saved) {
+                        this.productCatalog[actualIndex] = previous;
+                        this.showToast(this.lang === 'ar' ? 'تعذر حفظ تعديل الصلاحية على الخادم، وتم إرجاع التعديل.' : 'Could not save the shelf-life change to the server; the edit was reverted.', 'error');
+                        return;
+                    }
+
                     this.cancelCatalogEdit();
-                    this.showToast(this.lang === 'ar' ? 'تم تحديث الصنف بنجاح' : 'Product updated successfully');
-                    this.persistAppState();
+                    this.showToast(this.lang === 'ar' ? 'تم تحديث فترة الصلاحية وحفظها بنجاح' : 'Shelf life updated and saved successfully');
                 },
                 async deleteCatalogProduct(index) {
                     if(!confirm(this.lang==='ar'?'هل تريد نقل هذا الصنف إلى المحذوفات؟':'Move this product to Deleted Items?'))return;

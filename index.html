@@ -2864,6 +2864,22 @@
                     } catch (e) {
                         console.error('[Auth] Sign-out error:', e);
                     }
+                    // Never leave one user's data in memory when another account can log in.
+                    this.currentUserId = null;
+                    this._supabaseInitialSyncCompleted = false;
+                    this._supabaseSyncInFlight = null;
+                    this.samples = [];
+                    this.deletedSamples = [];
+                    this.deletedCatalog = [];
+                    this.permanentlyDeletedSamples = [];
+                    this.productCatalog = Array.isArray(window.MASTER_CATALOG_SEED)
+                        ? [...window.MASTER_CATALOG_SEED]
+                        : [];
+                    try {
+                        localStorage.removeItem('QC_ACTIVE_SAMPLES_MASTER_RECORD');
+                        localStorage.removeItem('QC_DELETED_SAMPLES');
+                        localStorage.removeItem('QC_DELETED_CATALOG');
+                    } catch (_) {}
                     this.auth = { isAuthenticated: false, role: null, username: '', email: null, error: '', loading: false };
                     this.appView = 'login';
                     this.loginForm.password = '';

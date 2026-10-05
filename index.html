@@ -1954,6 +1954,21 @@
                         
                         tree[year][month][sample.productName].push(sample);
                     });
+
+                    // Sort archived products alphabetically by product name.
+                    // Keep the existing year/month grouping and sample data unchanged.
+                    Object.keys(tree).forEach(yearKey => {
+                        Object.keys(tree[yearKey]).forEach(monthKey => {
+                            const sortedProducts = {};
+                            Object.keys(tree[yearKey][monthKey])
+                                .sort((a, b) => String(this.t(a) || a).localeCompare(String(this.t(b) || b), 'ar', { sensitivity: 'base' }))
+                                .forEach(productName => {
+                                    sortedProducts[productName] = tree[yearKey][monthKey][productName];
+                                });
+                            tree[yearKey][monthKey] = sortedProducts;
+                        });
+                    });
+
                     return tree;
                 },
                 archiveFolderSamples() {

@@ -2467,7 +2467,7 @@
                             deleted_samples:this.deletedSamples, deleted_catalog:this.deletedCatalog,
                             permanently_deleted_samples:this.permanentlyDeletedSamples,
                             app_data_version:window.APP_DATA_VERSION||'1.1.0', updated_at:new Date().toISOString()
-                        }, {onConflict:'id'});
+                        }, {onConflict:'owner_user_id,id'});
                         if(error) throw error;
 
                         this.samples=mergedSamples; this.productCatalog=mergedCatalog;
@@ -3571,7 +3571,7 @@
                     this.form.expirationDate = this.computedExpirationDate;
                     this.regenerateFormSchedule();
                 },
-                addSample() {
+                async addSample() {
                     if (!this.form.productName) {
                         alert(this.lang === 'ar' ? 'يرجى اختيار صنف من القائمة' : 'Please select a product from the list');
                         return;
@@ -3614,10 +3614,16 @@
                     this.samples.push(newSample);
                     
                     try {
-                        this.persistAppState();
-                        console.log('[QC Storage Success] Added new sample & saved inspection intervals to LocalStorage:', newSample);
+                        const saved = await this.persistAppState('add-sample');
+                        if (!saved) {
+                            this.samples = this.samples.filter(x => this.getSampleKey(x) !== this.getSampleKey(newSample));
+                            throw new Error('Server save failed');
+                        }
+                        console.log('[QC Storage Success] Added new sample & saved inspection intervals to Supabase:', newSample);
                     } catch (e) {
                         console.error('[QC Storage Error] Failed to persist sample:', e);
+                        this.showToast(this.lang === 'ar' ? 'تعذر حفظ العينة على الخادم. لم يتم فقد البيانات، أعد المحاولة.' : 'Could not save the sample to the server. Please retry.', 'error');
+                        return;
                     }
 
                     this.form = { productName: '', batchNumber: '', productionDate: '', expirationDate: '', customShelfLife: 6, notes: '' };

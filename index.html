@@ -1579,7 +1579,8 @@
                     // Shared-data safety: Supabase must finish the first sync before any
                     // localStorage-backed state is allowed to be persisted to the shared row.
                     _supabaseInitialSyncCompleted: false,
-                    _supabaseSyncInFlight: null
+                    _supabaseSyncInFlight: null,
+                    currentUserId: null
                 }
             },
             

@@ -2480,7 +2480,7 @@
                             deleted_samples:this.deletedSamples, deleted_catalog:this.deletedCatalog,
                             permanently_deleted_samples:this.permanentlyDeletedSamples,
                             app_data_version:window.APP_DATA_VERSION||'1.1.0', updated_at:new Date().toISOString()
-                        }, {onConflict:'owner_user_id,id'});
+                        }, {onConflict:'owner_user_id'});
                         if(error) throw error;
 
                         this.samples=mergedSamples; this.productCatalog=mergedCatalog;

@@ -2217,6 +2217,8 @@
                     }
                 },
                 async initializeSupabaseSync() {
+                    if (this._supabaseSyncInFlight) return this._supabaseSyncInFlight;
+                    this._supabaseSyncInFlight = (async () => {
                     try {
                         const { data: { session } } = await supabaseClient.auth.getSession();
                         if (!session?.user) {
@@ -2366,6 +2368,12 @@
                     } catch (error) {
                         console.warn('[Supabase Sync] Backend unavailable; LocalStorage fallback remains active.', error);
                         return false;
+                    }
+                    })();
+                    try {
+                        return await this._supabaseSyncInFlight;
+                    } finally {
+                        this._supabaseSyncInFlight = null;
                     }
                 },
                 async persistAppState(reason = 'automatic', options = {}) {

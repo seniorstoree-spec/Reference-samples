@@ -2335,29 +2335,32 @@
                                 ...this.deletedCatalog.map(x=>this.getCatalogKey(x)).filter(Boolean),
                                 ...registryCatalogKeys
                             ].filter(Boolean));
-// Never replace a larger local sample set with a smaller server set.
-                            // This protects data during refreshes and deployments.
-                            // IMPORTANT: this is a shared multi-user application. Once the shared state row
-                            // exists, the server copy is authoritative during refresh/login.
-                            // Do NOT merge another user's browser localStorage into it here.
-                            // Browser localStorage is per-user/per-browser and can otherwise
-                            // make one user's dataset appear instead of the shared dataset.
-                            const mergedSamples = (Array.isArray(data.samples) ? data.samples : [])
+// CRITICAL DATA-SAFETY RULE:
+                            // Never let an incomplete/empty server response erase a valid local
+                            // copy for the same authenticated user. Merge server + local first,
+                            // then apply authoritative deletion tombstones.
+                            const serverSamples = (Array.isArray(data.samples) ? data.samples : [])
                                 .filter(x=>!deletedSampleKeys.has(this.getSampleKey(x)));
-                            const serverSamplesCount = Array.isArray(data.samples) ? data.samples.length : 0;
+                            const localSamplesSafe = localSamples
+                                .filter(x=>!deletedSampleKeys.has(this.getSampleKey(x)));
+                            const mergedSamples = this.mergeSamplesSafely(serverSamples, localSamplesSafe);
+
+                            // Apply the same non-destructive rule to the catalog.
+                            const serverCatalog = (Array.isArray(data.catalog) ? data.catalog : [])
+                                .filter(x=>!deletedCatalogKeys.has(this.getCatalogKey(x)));
+                            const localCatalogSafe = localCatalog
+                                .filter(x=>!deletedCatalogKeys.has(this.getCatalogKey(x)));
+                            const mergedCatalog = this.mergeDeletedItems(serverCatalog, localCatalogSafe);
 
                             // Keep inspection details collapsed after login/refresh.
-                            // The user can expand them only with the dedicated arrow.
                             mergedSamples.forEach(sample => { sample.expanded = false; });
 
                             this.samples = mergedSamples;
                             localStorage.setItem('QC_ACTIVE_SAMPLES_MASTER_RECORD', JSON.stringify(mergedSamples));
 
-                            if (Array.isArray(data.catalog) && data.catalog.length > 0) {
-                                this.productCatalog = data.catalog.filter(x=>!deletedCatalogKeys.has(this.getCatalogKey(x)));
-                                localStorage.setItem('QC_MASTER_CATALOG_DATA', JSON.stringify(this.productCatalog));
-                            } else if (localCatalog.length > 0) {
-                                this.productCatalog = localCatalog;
+                            if (mergedCatalog.length > 0) {
+                                this.productCatalog = mergedCatalog;
+                                localStorage.setItem('QC_MASTER_CATALOG_DATA', JSON.stringify(mergedCatalog));
                             }
 
                             if (data.app_data_version) {

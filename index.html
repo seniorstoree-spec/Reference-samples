@@ -1217,7 +1217,7 @@
                         <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15 7a2 2 0 0 1 2 2v1h1a3 3 0 0 1 3 3v4a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3v-4a3 3 0 0 1 3-3h7V9a3 3 0 0 0-6 0v1"></path>
                         </svg>
-                        {{ lang === 'ar' ? 'نسيت كلمة المرور' : 'Forgot Password' }}
+                        <span v-text="t('forgotPasswordTitle')"></span>
                     </h3>
                     <button @click="closeForgotPasswordModal" class="text-gray-400 hover:text-gray-600 focus:outline-none">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -1225,17 +1225,15 @@
                 </div>
                 <form @submit.prevent="requestPasswordReset" class="p-6 flex flex-col gap-4">
                     <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900 leading-relaxed">
-                        {{ lang === 'ar'
-                            ? 'سيتم إرسال رابط تغيير كلمة المرور إلى البريد المعتمد لاستعادة الحساب.'
-                            : 'A password reset link will be sent to the account recovery email.' }}
+                        <span v-text="t('forgotPasswordDescription')"></span>
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">
-                            {{ lang === 'ar' ? 'البريد الإلكتروني' : 'Email address' }}
+                            <span v-text="t('emailAddress')"></span>
                         </label>
                         <input type="email" v-model="forgotPasswordForm.email" autocomplete="email" dir="ltr" required class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 text-center font-mono">
                         <p class="text-xs text-gray-500 mt-2">
-                            {{ lang === 'ar' ? 'البريد المحدد حاليًا: qc.team@elabdfoods.com' : 'Current recovery mailbox: qc.team@elabdfoods.com' }}
+                            <span v-text="t('currentRecoveryMailbox')"></span>
                         </p>
                     </div>
                     <div v-if="forgotPasswordForm.message" class="bg-green-50 border border-green-200 text-green-800 px-3 py-3 rounded-lg text-sm font-bold text-center">
@@ -1249,7 +1247,7 @@
                             {{ t('cancel') }}
                         </button>
                         <button type="submit" :disabled="forgotPasswordForm.loading" class="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60 font-bold shadow-sm">
-                            {{ forgotPasswordForm.loading ? (lang === 'ar' ? 'جاري الإرسال...' : 'Sending...') : (lang === 'ar' ? 'إرسال رابط التغيير' : 'Send reset link') }}
+                            <span v-text="forgotPasswordForm.loading ? t('sendingResetLink') : t('sendResetLink')"></span>
                         </button>
                     </div>
                 </form>
@@ -1261,31 +1259,31 @@
             <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-fade-in">
                 <div class="px-6 py-4 border-b bg-blue-50">
                     <h3 class="font-bold text-lg text-blue-900">
-                        {{ t('recoveryTitle') }}
+                        <span v-text="t('recoveryTitle')"></span>
                     </h3>
                     <p class="text-sm text-blue-700 mt-1">
-                        {{ t('recoveryDescription') }}
+                        <span v-text="t('recoveryDescription')"></span>
                     </p>
                 </div>
                 <form @submit.prevent="completePasswordRecovery" class="p-6 flex flex-col gap-4">
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">{{ t('newPassword') }}</label>
+                        <label class="block text-sm font-bold text-gray-700 mb-2" v-text="t('newPassword')"></label>
                         <div class="relative">
                             <input :type="showRecoveryPassword ? 'text' : 'password'" v-model="recoveryPasswordForm.password" minlength="6" required dir="ltr" class="w-full px-4 py-3 pe-12 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 text-center font-mono tracking-widest">
                             <button type="button" @click="showRecoveryPassword = !showRecoveryPassword" class="absolute top-1/2 -translate-y-1/2 start-3 text-gray-500 hover:text-blue-700 p-1">
-                                <span class="text-xs font-bold">{{ showRecoveryPassword ? t('hidePassword') : t('showPassword') }}</span>
+                                <span class="text-xs font-bold" v-text="showRecoveryPassword ? t('hidePassword') : t('showPassword')"></span>
                             </button>
                         </div>
                     </div>
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">{{ t('confirmPassword') }}</label>
+                        <label class="block text-sm font-bold text-gray-700 mb-2" v-text="t('confirmPassword')"></label>
                         <input type="password" v-model="recoveryPasswordForm.confirmPassword" minlength="6" required dir="ltr" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 text-center font-mono tracking-widest">
                     </div>
                     <div v-if="recoveryPasswordForm.error" class="bg-red-50 border border-red-200 text-red-700 px-3 py-3 rounded-lg text-sm font-bold text-center">
                         {{ recoveryPasswordForm.error }}
                     </div>
                     <button type="submit" :disabled="recoveryPasswordForm.loading" class="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold py-3 rounded-lg shadow">
-                        {{ recoveryPasswordForm.loading ? t('savingPassword') : t('saveNewPassword') }}
+                        <span v-text="recoveryPasswordForm.loading ? t('savingPassword') : t('saveNewPassword')"></span>
                     </button>
                 </form>
             </div>
@@ -1451,6 +1449,11 @@
             "cancel": { en: "Cancel", ar: "إلغاء" },
             "saveResult": { en: "Save Result", ar: "حفظ النتيجة" },
             "forgotPasswordTitle": { en: "Forgot Password", ar: "نسيت كلمة المرور" },
+            "forgotPasswordDescription": { en: "A password reset link will be sent to the account recovery email.", ar: "سيتم إرسال رابط تغيير كلمة المرور إلى البريد المعتمد لاستعادة الحساب." },
+            "emailAddress": { en: "Email address", ar: "البريد الإلكتروني" },
+            "currentRecoveryMailbox": { en: "Current recovery mailbox: qc.team@elabdfoods.com", ar: "البريد المحدد حاليًا: qc.team@elabdfoods.com" },
+            "sendingResetLink": { en: "Sending...", ar: "جاري الإرسال..." },
+            "sendResetLink": { en: "Send reset link", ar: "إرسال رابط التغيير" },
             "recoveryTitle": { en: "Set a new password", ar: "تعيين كلمة مرور جديدة" },
             "recoveryDescription": { en: "Your recovery link is valid. Enter and save your new password.", ar: "تم فتح رابط الاستعادة. أدخل كلمة المرور الجديدة ثم احفظها." },
             "newPassword": { en: "New password", ar: "كلمة المرور الجديدة" },

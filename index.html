@@ -1659,15 +1659,36 @@
                                 this.showRecoveryPassword = false;
                                 return;
                             }
-                            if (session?.user && !explicitRecovery) {
-                                await this.applySupabaseUser(session.user);
-                                this.appView = 'qc';
-                            } else if (event === 'SIGNED_OUT') {
+
+                            if (event === 'SIGNED_OUT') {
                                 this.auth = { isAuthenticated: false, role: null, username: '', email: null, error: '', loading: false };
                                 this.appView = 'login';
+                                return;
                             }
-                        });
-                    } catch (e) {
+
+                            if (session?.user && !explicitRecovery) {
+                                const nextUserId = String(session.user.id || '').trim();
+                                const isNewAuthenticatedUser = !this.currentUserId || this.currentUserId !== nextUserId;
+
+                                // TOKEN_REFRESHED, USER_UPDATED and INITIAL_SESSION can fire when a
+                                // background tab becomes active again. Do not call applySupabaseUser
+                                // for an already-loaded account because that method intentionally
+                                // clears the in-memory dataset before syncing it.
+                                if (event === 'SIGNED_IN' || isNewAuthenticatedUser) {
+                                    await this.applySupabaseUser(session.user);
+                                    this.appView = 'qc';
+                                    if (!this._supabaseInitialSyncCompleted) {
+                                        await this.initializeSupabaseSync();
+                                    }
+                                } else {
+                                    // Refresh auth identity only; preserve all loaded application data.
+                                    this.currentUserId = nextUserId;
+                                    this.auth.isAuthenticated = true;
+                                    this.auth.email = session.user.email || this.auth.email;
+                                    this.appView = 'qc';
+                                }
+                            }
+                        });                   } catch (e) {
                         console.error('[Auth] Session initialization failed:', e);
                         this.auth.error = this.lang === 'ar'
                             ? 'تعذر التحقق من جلسة الدخول. حاول تسجيل الدخول مرة أخرى.'

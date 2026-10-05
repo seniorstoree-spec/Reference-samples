@@ -3593,8 +3593,10 @@
                     const trimmedName = this.form.productName.trim();
                     if (!this.isProductInCatalog(trimmedName)) {
                         this.form.productName = trimmedName;
+                        // Do not persist here. addSample() persists the catalog and the new sample
+                        // together in one awaited transaction-like save. A second unawaited save here
+                        // could race with add-sample and overwrite the newly added sample.
                         this.productCatalog.push({ name: trimmedName, shelfLifeMonths: this.form.customShelfLife || 6 });
-                        this.persistAppState();
                     }
 
                     const newSample = {

@@ -2564,7 +2564,12 @@
                     return `${encoded}@reference-samples.local`;
                 },
                 async applySupabaseUser(user) {
-                    const role = user?.app_metadata?.reference_role || user?.app_metadata?.role || 'user';
+                    // Every authenticated account is a normal shared-data user by default.
+                    // Only an explicit server-side admin role may open the developer dashboard.
+                    // app_metadata is used here because user_metadata is user-editable and must
+                    // never be trusted for authorization.
+                    const requestedRole = user?.app_metadata?.reference_role || user?.app_metadata?.role;
+                    const role = requestedRole === 'admin' ? 'admin' : 'user';
                     const displayName = user?.user_metadata?.display_name || user?.user_metadata?.username || user?.email || 'User';
                     const isUsernameAccount = user?.user_metadata?.account_type === 'username';
                     this.auth = {

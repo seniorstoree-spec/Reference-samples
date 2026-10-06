@@ -2139,6 +2139,10 @@
                     });
                     return count;
                 },
+                dueTodayRate() {
+                    const total = this.totalInspectionsCount;
+                    return total ? (this.inspectionsDueToday.length / total) * 100 : 0;
+                },
                 acceptanceRate() {
                     const total = this.completedInspectionsCount;
                     return total ? ((this.totalAcceptedCount + this.totalAcceptedWithNotesCount) / total) * 100 : 0;
@@ -2162,9 +2166,6 @@
                 archivedSamplesRate() {
                     const total = this.samples.length;
                     return total ? (this.archivedSamplesCount / total) * 100 : 0;
-                },
-                formatPercent(value) {
-                    return Number(value || 0).toFixed(1) + '%';
                 },
                 activeSamplesCount() {
                     return this.samples.filter(s => ['Active', 'Near Expiry'].includes(this.getStatus(s))).length;
@@ -2373,6 +2374,10 @@
             beforeUnmount() {
                 },
             methods: {
+                formatPercent(value) {
+                    const numericValue = Number(value);
+                    return (Number.isFinite(numericValue) ? numericValue : 0).toFixed(1) + '%';
+                },
                 getSampleKey(sample) { return String(sample?.id ?? sample?.sampleId ?? sample?.operationalNumber ?? '').trim(); },
                 getCatalogKey(item) { return String(item?.id ?? item?.name ?? '').trim().toLowerCase(); },
                 getCurrentUserId() {

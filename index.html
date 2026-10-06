@@ -4790,91 +4790,135 @@
                 },
                 exportChartImage(type) {
                     try {
-                        if (typeof Chart === 'undefined') {
-                            this.showToast(this.lang === 'ar' ? 'مكتبة الرسم البياني غير متاحة' : 'Chart library is unavailable', 'error');
-                            return;
-                        }
-                        const exportCanvasElement = type === 'categories'
+                        const canvas = type === 'categories'
                             ? document.getElementById('chartCategory')
                             : document.getElementById('chartDefects');
-                        const chart = exportCanvasElement?.__referenceSamplesChart ||
+                        const chart = canvas?.__referenceSamplesChart ||
                             (type === 'categories' ? this.chartInstances.categories : this.chartInstances.defects);
-                        if (!chart || !chart.canvas) {
+
+                        if (!canvas || !chart) {
                             this.showToast(this.lang === 'ar' ? 'الرسم البياني غير متاح حاليًا' : 'Chart is not available', 'error');
                             return;
                         }
 
-                        const labels = Array.isArray(chart.data?.labels) ? chart.data.labels : [];
-                        const labelCount = Math.max(labels.length, 1);
-                        const exportWidth = type === 'defects' ? 1800 : Math.max(1600, labelCount * 150);
-                        const exportHeight = type === 'defects'
-                            ? Math.max(1000, labelCount * 110 + 260)
-                            : 1000;
+                        if (typeof canvas.toDataURL !== 'function') {
+                            throw new Error('Canvas export is not supported by this browser');
+                        }
 
-                        const exportCanvas = document.createElement('canvas');
-                        const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
-                        exportCanvas.width = Math.round(exportWidth * dpr);
-                        exportCanvas.height = Math.round(exportHeight * dpr);
-
-                        const exportOptions = Object.assign({}, chart.options || {}, {
-                            responsive: false,
-                            maintainAspectRatio: false,
-                            animation: false,
-                            devicePixelRatio: dpr
-                        });
-
-                        const exportData = {
-                            labels: labels.slice(),
-                            datasets: (chart.data?.datasets || []).map(dataset => ({
-                                ...dataset,
-                                data: Array.isArray(dataset.data) ? dataset.data.slice() : dataset.data
-                            }))
-                        };
-
-                        const exportChart = new Chart(exportCanvas.getContext('2d'), {
-                            type: chart.config?.type || 'bar',
-                            data: exportData,
-                            options: exportOptions,
-                            plugins: Array.isArray(chart.config?.plugins) ? chart.config.plugins : []
-                        });
-
-                        exportChart.resize(exportCanvas.width, exportCanvas.height);
-                        exportChart.update('none');
-                        exportChart.render();
-
-                        const imageData = exportCanvas.toDataURL('image/png', 1);
-                        exportChart.destroy();
+                        // Export exactly the chart that is currently rendered. This avoids creating
+                        // a second Chart.js instance and eliminates the lifecycle/plugin failures
+                        // that previously prevented the download.
+                        if (typeof chart.update === 'function') chart.update('none');
+                        const imageData = canvas.toDataURL('image/png', 1);
 
                         const link = document.createElement('a');
+                        link.href = imageData;
                         link.download = 'Dashboard_' +
                             (type === 'categories' ? 'Product_Defects_By_Category' : 'Top_Product_Defects') +
                             '_' + new Date().toISOString().split('T')[0] + '.png';
-                        link.href = imageData;
                         document.body.appendChild(link);
                         link.click();
                         link.remove();
 
-                        this.showToast(this.lang === 'ar' ? 'تم تصدير الرسم البياني كاملًا دون قص' : 'Full chart exported without cropping');
+                        this.showToast(this.lang === 'ar' ? 'تم تصدير الرسم البياني بنجاح' : 'Chart exported successfully');
                     } catch (err) {
                         console.error('Chart Export Error:', err);
-                        this.showToast(this.lang === 'ar' ? 'حدث خطأ أثناء تصدير الرسم البياني' : 'Chart export failed', 'error');
+                        this.showToast(this.lang === 'ar' ? 'حدث خطأ أثناء تصدير الرسم البياني: ' + (err?.message || '') : 'Chart export failed: ' + (err?.message || ''), 'error');
+                    }
+                },
+                exportKpiData(type) {
+                    try {
+                        const allSamples = Array.isArray(this.samples) ? this.samples : [];
+                        const matches = {
+                            dueToday: sample => Array.isArray(sample.inspections) && sample.inspections.some(insp => this.getInspectionStatus(insp) === 'Due Today'),
+                            nearExpiry: sample => this.getStatus(sample) === 'Near Expiry',
+                            accepted: sample => Array.isArray(sample.inspections) && sample.inspections.some(insp => insp && insp.result === 'Accepted'),
+                            acceptedNotes: sample => Array.isArray(sample.inspections) && sample.inspections.some(insp => insp && insp.result === 'Accepted with Notes'),
+                            rejected: sample => Array.isArray(sample.inspections) && sample.inspections.some(insp => insp && insp.result === 'Rejected')
+                        };
+                        const predicate = matches[type];
+                        if (!predicate) {
+                            this.showToast(this.lang === 'ar' ? 'نوع التصدير غير معروف' : 'Unknown export type', 'error');
+                            return;
+                        }
+
+                        const rows = [];
+                        allSamples.filter(predicate).forEach((sample, index) => {
+                            const inspections = Array.isArray(sample.inspections) ? sample.inspections : [];
+                            const relevant = inspections.filter(insp => {
+                                if (!insp) return false;
+                                if (type === 'dueToday') return this.getInspectionStatus(insp) === 'Due Today';
+                                if (type === 'nearExpiry') return this.getStatus(sample) === 'Near Expiry';
+                                if (type === 'accepted') return insp.result === 'Accepted';
+                                if (type === 'acceptedNotes') return insp.result === 'Accepted with Notes';
+                                if (type === 'rejected') return insp.result === 'Rejected';
+                                return false;
+                            });
+
+                            rows.push({
+                                "م": index + 1,
+                                "اسم الصنف": this.t(sample.productName) || sample.productName || '',
+                                "تاريخ الإنتاج": this.formatDate(sample.productionDate),
+                                "رقم التشغيلة": sample.batchNumber || '',
+                                "حالة العينة": this.getStatus(sample),
+                                "نتيجة الفحص": this.getSampleInspectionResult(sample),
+                                "تصنيف المشكلة": [...new Set(relevant.map(i => i.issueCategory ? this.t(i.issueCategory) : '').filter(Boolean))].join('، '),
+                                "العيوب": [...new Set(relevant.flatMap(i => Array.isArray(i.defectTags) ? i.defectTags.map(t => this.t(t)).filter(Boolean) : []))].join('، '),
+                                "ملاحظات": [...new Set(relevant.map(i => i.notes || '').filter(Boolean))].join('\n'),
+                                "أسباب الرفض": [...new Set(relevant.map(i => i.rejectionReason || '').filter(Boolean))].join('\n')
+                            });
+                        });
+
+                        if (!rows.length) {
+                            this.showToast(this.lang === 'ar' ? 'لا توجد بيانات متاحة لهذا المؤشر' : 'No data available for this KPI', 'error');
+                            return;
+                        }
+
+                        const filename = 'KPI_' + type + '_' + new Date().toISOString().split('T')[0] + '.xlsx';
+
+                        if (typeof window.XLSX !== 'undefined' && window.XLSX.utils && window.XLSX.writeFile) {
+                            const worksheet = window.XLSX.utils.json_to_sheet(rows);
+                            worksheet['!views'] = [{ rightToLeft: this.lang === 'ar' }];
+                            worksheet['!cols'] = [
+                                { wch: 8 }, { wch: 25 }, { wch: 18 }, { wch: 20 }, { wch: 18 },
+                                { wch: 20 }, { wch: 24 }, { wch: 35 }, { wch: 50 }, { wch: 50 }
+                            ];
+                            const workbook = window.XLSX.utils.book_new();
+                            window.XLSX.utils.book_append_sheet(workbook, worksheet, 'KPI_Data');
+                            window.XLSX.writeFile(workbook, filename);
+                        } else {
+                            const headers = Object.keys(rows[0]);
+                            const csv = '\ufeff' + [headers, ...rows.map(row => headers.map(h => String(row[h] ?? '')))]
+                                .map(row => row.map(value => '"' + value.replace(/"/g, '""') + '"').join(','))
+                                .join('\r\n');
+                            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = filename.replace(/\.xlsx$/i, '.csv');
+                            document.body.appendChild(link);
+                            link.click();
+                            link.remove();
+                            setTimeout(() => URL.revokeObjectURL(url), 1000);
+                        }
+
+                        this.showToast(this.lang === 'ar' ? 'تم تصدير بيانات المؤشر بنجاح' : 'KPI data exported successfully');
+                    } catch (err) {
+                        console.error('KPI Export Error:', err);
+                        this.showToast(this.lang === 'ar' ? 'فشل تصدير بيانات المؤشر: ' + (err?.message || '') : 'KPI export failed: ' + (err?.message || ''), 'error');
                     }
                 },
                 exportCSV() {
                     try {
-                        if (!this.filteredSamples || this.filteredSamples.length === 0) {
+                        const sourceSamples = Array.isArray(this.samples) ? this.samples : [];
+                        if (sourceSamples.length === 0) {
                             this.showToast(this.t('noRecordsExport'), 'error');
-                            return;
-                        }
-
-                        if (typeof window.XLSX === 'undefined') {
-                            this.showToast(this.lang === 'ar' ? 'مكتبة إكسيل غير متوفرة' : 'Excel library not loaded', 'error');
                             return;
                         }
 
                         const exportData = [];
 
-                        this.filteredSamples.forEach((sample, idx) => {
+                        sourceSamples.forEach((sample, idx) => {
                             const search = (sample.productName || '').trim().toLowerCase();
                             const catalogItem = this.productCatalog.find(p =>
                                 p.name.trim().toLowerCase() === search ||
@@ -4993,10 +5037,26 @@
                         const workbook = window.XLSX.utils.book_new();
                         window.XLSX.utils.book_append_sheet(workbook, worksheet, "Active_Samples");
 
-                        window.XLSX.writeFile(
-                            workbook,
-                            `QC_Retention_Samples_Export_${new Date().toISOString().split('T')[0]}.xlsx`
-                        );
+                        if (typeof window.XLSX !== 'undefined' && window.XLSX.writeFile) {
+                            window.XLSX.writeFile(
+                                workbook,
+                                `QC_Retention_Samples_Export_${new Date().toISOString().split('T')[0]}.xlsx`
+                            );
+                        } else {
+                            const headers = Object.keys(exportData[0] || {});
+                            const csv = '\ufeff' + [headers, ...exportData.map(row => headers.map(h => String(row[h] ?? '')))]
+                                .map(row => row.map(value => '"' + value.replace(/"/g, '""') + '"').join(','))
+                                .join('\r\n');
+                            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = `QC_Retention_Samples_Export_${new Date().toISOString().split('T')[0]}.csv`;
+                            document.body.appendChild(link);
+                            link.click();
+                            link.remove();
+                            setTimeout(() => URL.revokeObjectURL(url), 1000);
+                        }
 
                         this.showToast(this.lang === 'ar' ? 'تم تصدير الملف بنجاح مع جميع الملاحظات وبيانات المشكلات' : 'File exported successfully with all notes and issue details!');
                     } catch (err) {

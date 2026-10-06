@@ -2633,8 +2633,11 @@
                             .filter(x => x.entity_type === 'sample')
                             .map(x => x.payload)
                             .filter(Boolean);
+                        // Permanent catalog deletions remain as tombstones only so the
+                        // product can never return to the active catalog, but they must NOT
+                        // appear in the Deleted Items list.
                         const registryCatalog = deletionRegistry
-                            .filter(x => x.entity_type === 'catalog')
+                            .filter(x => x.entity_type === 'catalog' && !x.is_permanent)
                             .map(x => x.payload)
                             .filter(Boolean);
                         this.deletedSamples = this.mergeDeletedItems(
@@ -2801,7 +2804,13 @@
 
                         const deletionRegistry = await this.loadDeletedRegistry();
                         const registrySamples = deletionRegistry.filter(x => x.entity_type === 'sample').map(x => x.payload).filter(Boolean);
-                        const registryCatalog = deletionRegistry.filter(x => x.entity_type === 'catalog').map(x => x.payload).filter(Boolean);
+                        // Only non-permanent catalog tombstones belong in Deleted Items.
+                        // Permanent tombstones are used solely to block the product from
+                        // returning to the active catalog after refresh/sync.
+                        const registryCatalog = deletionRegistry
+                            .filter(x => x.entity_type === 'catalog' && !x.is_permanent)
+                            .map(x => x.payload)
+                            .filter(Boolean);
 
                         const restoredSampleKey = reason === 'restore-sample'
                             ? String(options.restoredSampleKey || '')
@@ -2818,6 +2827,15 @@
                             this.deletedSamples = this.mergeDeletedItems(current?.deleted_samples, this.deletedSamples);
                         }
                         this.deletedCatalog = this.mergeDeletedItems(current?.deleted_catalog, this.deletedCatalog);
+                        const permanentCatalogKeys = new Set(
+                            deletionRegistry
+                                .filter(x => x.entity_type === 'catalog' && x.is_permanent)
+                                .map(x => String(x.entity_key || '').trim().toLowerCase())
+                                .filter(Boolean)
+                        );
+                        this.deletedCatalog = this.deletedCatalog.filter(
+                            item => !permanentCatalogKeys.has(this.getCatalogKey(item))
+                        );
                         const permanentServer = Array.isArray(current?.permanently_deleted_samples) ? current.permanently_deleted_samples : [];
                         const permanentLocal = Array.isArray(this.permanentlyDeletedSamples) ? this.permanentlyDeletedSamples : [];
                         const permanentByKey = new Map();

@@ -3422,7 +3422,9 @@
                         expDay: unit === 'Days' ? this.catalogForm.shelfLifeMonths : null,
                         expYear: unit === 'Years' ? this.catalogForm.shelfLifeMonths : null
                     };
-                    this.productCatalog.push(newItem);
+                    // New products must always appear at the very top of the directory.
+                    // Keep the existing order of all previous products unchanged.
+                    this.productCatalog.unshift(newItem);
                     // Reset form fields
                     this.catalogForm.name = '';
                     this.catalogForm.shelfLifeMonths = 6;

@@ -2383,7 +2383,16 @@
                     const numericValue = Number(value);
                     return (Number.isFinite(numericValue) ? numericValue : 0).toFixed(1) + '%';
                 },
-                getSampleKey(sample) { return String(sample?.id ?? sample?.sampleId ?? sample?.operationalNumber ?? '').trim(); },
+                getSampleKey(sample) {
+                    const direct = String(sample?.id ?? sample?.sampleId ?? sample?.operationalNumber ?? '').trim();
+                    if (direct) return direct;
+                    const batch = String(sample?.batchNumber ?? '').trim().toLowerCase();
+                    const product = String(sample?.productName ?? '').trim().toLowerCase();
+                    const production = String(sample?.productionDate ?? '').trim();
+                    if (batch) return 'batch:' + batch;
+                    if (product || production) return 'legacy:' + product + '|' + production;
+                    return '';
+                },
                 getCatalogKey(item) { return String(item?.id ?? item?.name ?? '').trim().toLowerCase(); },
                 getCurrentUserId() {
                     return String(this.currentUserId || '').trim();
@@ -2427,13 +2436,30 @@
                         .eq('entity_key', entityKey);
                     if (error) throw error;
                 },
-                mergeDeletedItems(serverItems, localItems) {
+                mergeDeletedItems(serverItems, localItems, entityType = '') {
                     const byKey = new Map();
-                    [...(Array.isArray(serverItems) ? serverItems : []), ...(Array.isArray(localItems) ? localItems : [])].forEach(item => {
-                        const key = item && item.name !== undefined ? this.getCatalogKey(item) : this.getSampleKey(item);
+                    const allItems = [
+                        ...(Array.isArray(serverItems) ? serverItems : []),
+                        ...(Array.isArray(localItems) ? localItems : [])
+                    ];
+                    allItems.forEach(item => {
+                        if (!item) return;
+                        const key = entityType === 'catalog'
+                            ? this.getCatalogKey(item)
+                            : entityType === 'sample'
+                                ? this.getSampleKey(item)
+                                : (item.name !== undefined ? this.getCatalogKey(item) : this.getSampleKey(item));
                         if (key) byKey.set(key, item);
                     });
-                    return Array.from(byKey.values());
+                    const values = Array.from(byKey.values());
+                    if (entityType === 'sample') {
+                        values.sort((a, b) => {
+                            const ta = new Date(a?.deletedAt || 0).getTime() || 0;
+                            const tb = new Date(b?.deletedAt || 0).getTime() || 0;
+                            return tb - ta;
+                        });
+                    }
+                    return values;
                 },
                 mergeSamplesSafely(serverSamples, localSamples) {
                     const server = Array.isArray(serverSamples) ? serverSamples : [];
@@ -2546,19 +2572,46 @@
                             ? this.permanentlyDeletedSamples
                             : [];
 
+                        // The deletion registry is the authoritative source for sample deletion
+                        // state. Permanent registry rows are tombstones only and must NEVER appear
+                        // in the Deleted Samples UI, even if an older app_state/localStorage copy
+                        // still contains them.
+                        let registry = [];
+                        try {
+                            registry = await this.loadDeletedRegistry();
+                        } catch (registryError) {
+                            console.warn('[Deleted Items] Registry refresh failed:', registryError);
+                        }
+
+                        const registryPermanentKeys = new Set(
+                            registry
+                                .filter(x => x.entity_type === 'sample' && x.is_permanent)
+                                .map(x => String(x.entity_key || '').trim())
+                                .filter(Boolean)
+                        );
+
                         const permanentByKey = new Map();
                         [...serverPermanent, ...localPermanent].forEach(item => {
                             const key = item && item.key ? String(item.key) : '';
                             if (key) permanentByKey.set(key, item);
                         });
+                        registryPermanentKeys.forEach(key => {
+                            if (!permanentByKey.has(key)) {
+                                permanentByKey.set(key, {
+                                    key,
+                                    permanentlyDeletedAt: new Date().toISOString()
+                                });
+                            }
+                        });
 
                         this.permanentlyDeletedSamples = Array.from(permanentByKey.values());
-                        const permanentKeys = new Set(
-                            this.permanentlyDeletedSamples.map(x => String(x.key || '')).filter(Boolean)
-                        );
+                        const permanentKeys = new Set([
+                            ...this.permanentlyDeletedSamples.map(x => String(x.key || '').trim()),
+                            ...registryPermanentKeys
+                        ].filter(Boolean));
 
-                        // A permanent tombstone always wins over stale LocalStorage data.
-                        const merged = this.mergeDeletedItems(serverItems, localItems)
+                        // A permanent tombstone always wins over stale LocalStorage/app_state data.
+                        const merged = this.mergeDeletedItems(serverItems, localItems, 'sample')
                             .filter(item => !permanentKeys.has(this.getSampleKey(item)));
 
                         this.deletedSamples = merged;
@@ -2629,10 +2682,18 @@
                         // The deletion registry is the authoritative, independent tombstone store.
                         // It cannot be accidentally erased by a normal state upsert.
                         const deletionRegistry = await this.loadDeletedRegistry();
-                        const registrySamples = deletionRegistry
-                            .filter(x => x.entity_type === 'sample')
+                        const registrySampleRows = deletionRegistry
+                            .filter(x => x.entity_type === 'sample');
+                        const registrySamples = registrySampleRows
+                            .filter(x => !x.is_permanent)
                             .map(x => x.payload)
                             .filter(Boolean);
+                        const registryPermanentSampleKeys = new Set(
+                            registrySampleRows
+                                .filter(x => x.is_permanent)
+                                .map(x => String(x.entity_key || '').trim())
+                                .filter(Boolean)
+                        );
                         // Permanent catalog deletions remain as tombstones only so the
                         // product can never return to the active catalog, but they must NOT
                         // appear in the Deleted Items list.
@@ -2642,8 +2703,9 @@
                             .filter(Boolean);
                         this.deletedSamples = this.mergeDeletedItems(
                             Array.isArray(data?.deleted_samples) ? data.deleted_samples : [],
-                            this.mergeDeletedItems(this.deletedSamples, registrySamples)
-                        );
+                            this.mergeDeletedItems(this.deletedSamples, registrySamples, 'sample'),
+                            'sample'
+                        ).filter(item => !registryPermanentSampleKeys.has(this.getSampleKey(item)));
                         this.deletedCatalog = this.mergeDeletedItems(
                             Array.isArray(data?.deleted_catalog) ? data.deleted_catalog : [],
                             this.mergeDeletedItems(this.deletedCatalog, registryCatalog)
@@ -2670,14 +2732,18 @@
                                 if (key) permanentByKey.set(key, item);
                             });
                             this.permanentlyDeletedSamples = Array.from(permanentByKey.values());
-                            const permanentKeys = new Set(this.permanentlyDeletedSamples.map(x => String(x.key || '')).filter(Boolean));
+                            const permanentKeys = new Set([
+                                ...this.permanentlyDeletedSamples.map(x => String(x.key || '').trim()),
+                                ...registryPermanentSampleKeys
+                            ].filter(Boolean));
 
                             // Supabase is the durable source for deletions, but any local
                             // deletion created before a refresh must also be preserved and reconciled.
                             // The merged tombstones are then used to filter the active sample list.
                             this.deletedSamples = this.mergeDeletedItems(
                                 Array.isArray(data.deleted_samples) ? data.deleted_samples : [],
-                                this.deletedSamples
+                                this.deletedSamples,
+                                'sample'
                             ).filter(item => !permanentKeys.has(this.getSampleKey(item)));
 
                             const deletedSampleKeysForSync = new Set(
@@ -2803,7 +2869,17 @@
                         if (readError) throw readError;
 
                         const deletionRegistry = await this.loadDeletedRegistry();
-                        const registrySamples = deletionRegistry.filter(x => x.entity_type === 'sample').map(x => x.payload).filter(Boolean);
+                        const registrySampleRows = deletionRegistry.filter(x => x.entity_type === 'sample');
+                        const registryPermanentSampleKeys = new Set(
+                            registrySampleRows
+                                .filter(x => x.is_permanent)
+                                .map(x => String(x.entity_key || '').trim())
+                                .filter(Boolean)
+                        );
+                        const registrySamples = registrySampleRows
+                            .filter(x => !x.is_permanent)
+                            .map(x => x.payload)
+                            .filter(Boolean);
                         // Only non-permanent catalog tombstones belong in Deleted Items.
                         // Permanent tombstones are used solely to block the product from
                         // returning to the active catalog after refresh/sync.
@@ -2844,8 +2920,12 @@
                             if (key) permanentByKey.set(key, item);
                         });
                         this.permanentlyDeletedSamples = Array.from(permanentByKey.values());
-                        this.deletedSamples = this.mergeDeletedItems(this.deletedSamples, registrySamples);
+                        this.deletedSamples = this.mergeDeletedItems(this.deletedSamples, registrySamples, 'sample')
+                            .filter(item => !registryPermanentSampleKeys.has(this.getSampleKey(item)));
                         this.deletedCatalog = this.mergeDeletedItems(this.deletedCatalog, registryCatalog);
+
+                        this.deletedSamples = this.deletedSamples
+                            .filter(item => !registryPermanentSampleKeys.has(this.getSampleKey(item)));
 
                         const ds = new Set([
                             ...this.deletedSamples.map(x=>this.getSampleKey(x)),

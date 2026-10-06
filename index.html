@@ -4528,14 +4528,14 @@
                     let defectsCountMap = {};
 
                     this.filteredSamples.forEach(sample => {
-                        sample.inspections.forEach(insp => {
+                        (Array.isArray(sample.inspections) ? sample.inspections : []).forEach(insp => {
                             if (insp.result) {
                                 if (resultsCount[insp.result] !== undefined) resultsCount[insp.result]++;
                             }
                             if (insp.issueCategory) {
                                 if (categoryCount[insp.issueCategory] !== undefined) categoryCount[insp.issueCategory]++;
                             }
-                            if (insp.defectTags && insp.defectTags.length > 0) {
+                            if (Array.isArray(insp.defectTags) && insp.defectTags.length > 0) {
                                 insp.defectTags.forEach(tag => {
                                     defectsCountMap[tag] = (defectsCountMap[tag] || 0) + 1;
                                 });
@@ -4543,7 +4543,55 @@
                         });
                     });
 
-                    const defectsSorted = Object.entries(defectsCountMap).sort((a,b) => b[1] - a[1]).slice(0, 5);
+                    const defectsSorted = Object.entries(defectsCountMap)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 5);
+
+                    const resultTotal = Object.values(resultsCount).reduce((sum, value) => sum + value, 0);
+                    const categoryTotal = Object.values(categoryCount).reduce((sum, value) => sum + value, 0);
+                    const defectsTotal = Object.values(defectsCountMap).reduce((sum, value) => sum + value, 0);
+
+                    const percent = (value, total) => total > 0 ? (value / total) * 100 : 0;
+                    const formatChartPercent = value => Number.isFinite(value) ? value.toFixed(1) + '%' : '0.0%';
+
+                    // Draw real percentages directly on every chart while keeping the
+                    // original counts available in tooltips. No application data is changed.
+                    const percentageLabelsPlugin = {
+                        id: 'referenceSamplesPercentageLabels',
+                        afterDatasetsDraw(chart) {
+                            const ctx = chart.ctx;
+                            ctx.save();
+                            ctx.font = '600 11px Cairo, Arial, sans-serif';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+
+                            chart.data.datasets.forEach((dataset, datasetIndex) => {
+                                const meta = chart.getDatasetMeta(datasetIndex);
+                                meta.data.forEach((element, index) => {
+                                    const value = Number(dataset.data[index]) || 0;
+                                    const total = Number(element.$context?.rawTotal) || Number(chart.$percentageTotal) || 0;
+                                    const percentage = percent(value, total);
+                                    if (percentage <= 0) return;
+
+                                    const position = element.tooltipPosition();
+                                    let x = position.x;
+                                    let y = position.y;
+
+                                    if (chart.config.type === 'bar') {
+                                        if (chart.options.indexAxis === 'y') {
+                                            x = element.x + 24;
+                                        } else {
+                                            y = element.y - 10;
+                                        }
+                                    }
+
+                                    ctx.fillStyle = '#374151';
+                                    ctx.fillText(formatChartPercent(percentage), x, y);
+                                });
+                            });
+                            ctx.restore();
+                        }
+                    };
 
                     if (this.chartInstances.results) this.chartInstances.results.destroy();
                     this.chartInstances.results = new Chart(canvasResults, {
@@ -4555,41 +4603,161 @@
                                 backgroundColor: ['#22c55e', '#3b82f6', '#ef4444', '#6b7280']
                             }]
                         },
-                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { position: 'bottom' },
+                                tooltip: {
+                                    callbacks: {
+                                        label: context => {
+                                            const value = Number(context.raw) || 0;
+                                            return context.label + ': ' + value + ' (' + formatChartPercent(percent(value, resultTotal)) + ')';
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        plugins: [{
+                            ...percentageLabelsPlugin,
+                            id: 'resultsPercentageLabels',
+                            afterDatasetsDraw(chart) {
+                                const ctx = chart.ctx;
+                                const meta = chart.getDatasetMeta(0);
+                                ctx.save();
+                                ctx.font = '600 11px Cairo, Arial, sans-serif';
+                                ctx.textAlign = 'center';
+                                ctx.textBaseline = 'middle';
+                                meta.data.forEach((element, index) => {
+                                    const value = Number(chart.data.datasets[0].data[index]) || 0;
+                                    const pct = percent(value, resultTotal);
+                                    if (pct <= 0) return;
+                                    const p = element.tooltipPosition();
+                                    ctx.fillStyle = '#111827';
+                                    ctx.fillText(formatChartPercent(pct), p.x, p.y);
+                                });
+                                ctx.restore();
+                            }
+                        }]
                     });
 
                     if (this.chartInstances.categories) this.chartInstances.categories.destroy();
+                    const categoryPercentages = [
+                        percent(categoryCount['Food Safety'], categoryTotal),
+                        percent(categoryCount['Quality'], categoryTotal)
+                    ];
                     this.chartInstances.categories = new Chart(canvasCategories, {
                         type: 'bar',
                         data: {
                             labels: [this.t('Food Safety'), this.t('Quality')],
                             datasets: [{
                                 label: this.t('issueCategory'),
-                                data: [categoryCount['Food Safety'], categoryCount['Quality']],
+                                data: categoryCount['Food Safety'] || categoryCount['Quality'] ? categoryPercentages : [0, 0],
                                 backgroundColor: ['#ef4444', '#eab308']
                             }]
                         },
-                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: context => {
+                                            const key = context.dataIndex === 0 ? 'Food Safety' : 'Quality';
+                                            const count = categoryCount[key];
+                                            return count + ' ' + this.t('issueCategory') + ' (' + formatChartPercent(percent(count, categoryTotal)) + ')';
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 100,
+                                    ticks: {
+                                        stepSize: 20,
+                                        callback: value => value + '%'
+                                    }
+                                }
+                            }
+                        },
+                        plugins: [{
+                            id: 'categoryPercentageLabels',
+                            afterDatasetsDraw(chart) {
+                                const ctx = chart.ctx;
+                                const meta = chart.getDatasetMeta(0);
+                                ctx.save();
+                                ctx.font = '600 11px Cairo, Arial, sans-serif';
+                                ctx.textAlign = 'center';
+                                ctx.textBaseline = 'bottom';
+                                meta.data.forEach((element, index) => {
+                                    const pct = categoryPercentages[index] || 0;
+                                    if (pct <= 0) return;
+                                    ctx.fillStyle = '#374151';
+                                    ctx.fillText(formatChartPercent(pct), element.x, element.y - 6);
+                                });
+                                ctx.restore();
+                            }
+                        }]
                     });
 
                     if (this.chartInstances.defects) this.chartInstances.defects.destroy();
+                    const defectPercentages = defectsSorted.map(d => percent(d[1], defectsTotal));
                     this.chartInstances.defects = new Chart(canvasDefects, {
                         type: 'bar',
                         data: {
                             labels: defectsSorted.map(d => this.t(d[0])),
                             datasets: [{
                                 label: this.t('defectQuickTags'),
-                                data: defectsSorted.map(d => d[1]),
+                                data: defectPercentages,
                                 backgroundColor: '#6366f1'
                             }]
                         },
-                        options: { 
-                            indexAxis: 'y', 
-                            responsive: true, 
-                            maintainAspectRatio: false, 
-                            plugins: { legend: { display: false } },
-                            scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }
-                        }
+                        options: {
+                            indexAxis: 'y',
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: context => {
+                                            const original = defectsSorted[context.dataIndex]?.[1] || 0;
+                                            return original + ' ' + this.t('defectQuickTags') + ' (' + formatChartPercent(defectPercentages[context.dataIndex] || 0) + ')';
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    beginAtZero: true,
+                                    max: 100,
+                                    ticks: {
+                                        stepSize: 20,
+                                        callback: value => value + '%'
+                                    }
+                                }
+                            }
+                        },
+                        plugins: [{
+                            id: 'defectPercentageLabels',
+                            afterDatasetsDraw(chart) {
+                                const ctx = chart.ctx;
+                                const meta = chart.getDatasetMeta(0);
+                                ctx.save();
+                                ctx.font = '600 11px Cairo, Arial, sans-serif';
+                                ctx.textAlign = 'left';
+                                ctx.textBaseline = 'middle';
+                                meta.data.forEach((element, index) => {
+                                    const pct = defectPercentages[index] || 0;
+                                    if (pct <= 0) return;
+                                    ctx.fillStyle = '#374151';
+                                    ctx.fillText(formatChartPercent(pct), element.x + 6, element.y);
+                                });
+                                ctx.restore();
+                            }
+                        }]
                     });
                 },
                 exportCSV() {

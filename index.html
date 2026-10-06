@@ -1742,6 +1742,7 @@
                         categories: null,
                         defects: null
                     },
+                    _chartRetryTimer: null,
                     // Shared-data safety: Supabase must finish the first sync before any
                     // localStorage-backed state is allowed to be persisted to the shared row.
                     _supabaseInitialSyncCompleted: false,
@@ -1911,6 +1912,8 @@
                 });
             },
             beforeUnmount() {
+                clearTimeout(this._chartRetryTimer);
+                this._chartRetryTimer = null;
                 if (this._pageReturnHandler) {
                     document.removeEventListener('visibilitychange', this._pageReturnHandler);
                     window.removeEventListener('pageshow', this._pageReturnHandler);
@@ -4521,14 +4524,26 @@
                     this.kpiDrilldown.rows = [];
                 },
                 updateCharts() {
-                    if (typeof Chart === 'undefined') {
-                        console.warn('[Charts] Chart.js is unavailable; dashboard charts will be skipped.');
+                    if (!window.Chart) {
+                        clearTimeout(this._chartRetryTimer);
+                        this._chartRetryTimer = setTimeout(() => {
+                            this._chartRetryTimer = null;
+                            this.updateCharts();
+                        }, 500);
                         return;
                     }
                     const canvasResults = document.getElementById('chartResults');
                     const canvasCategories = document.getElementById('chartCategory');
                     const canvasDefects = document.getElementById('chartDefects');
                     if (!canvasResults || !canvasCategories || !canvasDefects) return;
+                    const canvasesReady = [canvasResults, canvasCategories, canvasDefects].every(canvas => {
+                        const rect = canvas.getBoundingClientRect();
+                        return rect.width > 0 && rect.height > 0;
+                    });
+                    if (!canvasesReady) {
+                        requestAnimationFrame(() => this.updateCharts());
+                        return;
+                    }
 
                     let resultsCount = { 'Accepted': 0, 'Accepted with Notes': 0, 'Rejected': 0, 'Shelf Life Expired': 0 };
                     let categoryCount = { 'Food Safety': 0, 'Quality': 0 };

@@ -4524,8 +4524,8 @@
                     this.kpiDrilldown.rows = [];
                 },
                 updateCharts() {
-                    // Charts are isolated UI elements. A failure in one chart must
-                    // never stop the dashboard or prevent the other charts from rendering.
+                    // Dashboard charts are driven directly from inspection defect records.
+                    // Food Safety vs Quality and Top 5 charts include product + notes in tooltips.
                     if (typeof window.Chart === 'undefined') {
                         clearTimeout(this._chartRetryTimer);
                         this._chartRetryTimer = setTimeout(() => this.updateCharts(), 500);
@@ -4539,15 +4539,12 @@
                     ];
                     if (canvases.some(canvas => !canvas)) return;
 
-                    if (!this.chartInstances) {
-                        this.chartInstances = { results: null, categories: null, defects: null };
-                    }
+                    if (!this.chartInstances) this.chartInstances = { results: null, categories: null, defects: null };
 
                     const ChartCtor = window.Chart;
                     const allSamples = Array.isArray(this.samples) ? this.samples : [];
-                    // Dashboard charts must never disappear because the Active/Archived/Rejected
-                    // tab happens to be selected. They are driven by the dashboard dataset.
                     let samples = allSamples;
+
                     if (this.activeKpiFilter) {
                         samples = allSamples.filter(sample => {
                             const status = this.getStatus(sample);
@@ -4563,21 +4560,32 @@
                             return true;
                         });
                     }
-                    const resultsCount = { 'Accepted': 0, 'Accepted with Notes': 0, 'Rejected': 0, 'Shelf Life Expired': 0 };
+
+                    const resultsCount = {
+                        'Accepted': 0,
+                        'Accepted with Notes': 0,
+                        'Rejected': 0,
+                        'Shelf Life Expired': 0
+                    };
+
                     const defectDefinitions = [
-                        { key: 'Insect/Larvae infestation', category: 'Food Safety', color: '#ef4444' },
-                        { key: 'Mold growth', category: 'Food Safety', color: '#ef4444' },
-                        { key: 'Severe Rancidity/Off-odor', category: 'Food Safety', color: '#ef4444' },
-                        { key: 'Moisture uptake/Loss of crispness', category: 'Quality', color: '#eab308' },
-                        { key: 'Chocolate blooming/Whitening', category: 'Quality', color: '#eab308' },
-                        { key: 'Sugar crystallization', category: 'Quality', color: '#eab308' },
-                        { key: 'Filling hardening/Toughness', category: 'Quality', color: '#eab308' },
-                        { key: 'Breakage/Color fading', category: 'Quality', color: '#eab308' },
-                        { key: 'Packaging/Label mismatch', category: 'Quality', color: '#eab308' }
+                        { key: 'Insect/Larvae infestation', category: 'Food Safety' },
+                        { key: 'Mold growth', category: 'Food Safety' },
+                        { key: 'Severe Rancidity/Off-odor', category: 'Food Safety' },
+                        { key: 'Moisture uptake/Loss of crispness', category: 'Quality' },
+                        { key: 'Chocolate blooming/Whitening', category: 'Quality' },
+                        { key: 'Sugar crystallization', category: 'Quality' },
+                        { key: 'Filling hardening/Toughness', category: 'Quality' },
+                        { key: 'Breakage/Color fading', category: 'Quality' },
+                        { key: 'Packaging/Label mismatch', category: 'Quality' }
                     ];
+
                     const defectCounts = {};
                     const defectDetails = {};
+                    const categoryCounts = { 'Food Safety': 0, 'Quality': 0 };
+                    const categoryDetails = { 'Food Safety': [], 'Quality': [] };
                     const resultDetails = {};
+
                     defectDefinitions.forEach(def => {
                         defectCounts[def.key] = 0;
                         defectDetails[def.key] = [];
@@ -4589,11 +4597,14 @@
                     samples.forEach(sample => {
                         const inspections = Array.isArray(sample.inspections) ? sample.inspections : [];
                         const productName = cleanChartText(this.t(sample.productName) || sample.productName || '-');
+
                         inspections.forEach(insp => {
                             if (!insp) return;
+
                             const result = cleanChartText(insp.result);
                             const note = cleanChartText(insp.notes);
                             const issueCategory = cleanChartText(insp.issueCategory ? this.t(insp.issueCategory) : '');
+
                             const inspectionInfo = {
                                 product: productName,
                                 batch: cleanChartText(sample.batchNumber),
@@ -4601,19 +4612,41 @@
                                 note,
                                 issueCategory
                             };
+
                             if (Object.prototype.hasOwnProperty.call(resultsCount, insp.result)) {
                                 resultsCount[insp.result]++;
                                 resultDetails[insp.result].push(inspectionInfo);
                             }
+
                             if (Array.isArray(insp.defectTags)) {
                                 insp.defectTags.forEach(tag => {
-                                    if (Object.prototype.hasOwnProperty.call(defectCounts, tag)) {
-                                        defectCounts[tag]++;
-                                        defectDetails[tag].push({
+                                    if (!Object.prototype.hasOwnProperty.call(defectCounts, tag)) return;
+
+                                    const def = defectDefinitions.find(item => item.key === tag);
+                                    const category = def ? def.category : (issueCategory === 'Food Safety' ? 'Food Safety' : 'Quality');
+
+                                    defectCounts[tag]++;
+                                    defectDetails[tag].push({
+                                        ...inspectionInfo,
+                                        defect: cleanChartText(this.t(tag)),
+                                        category
+                                    });
+
+                                    if (Object.prototype.hasOwnProperty.call(categoryCounts, category)) {
+                                        categoryCounts[category]++;
+                                        categoryDetails[category].push({
                                             ...inspectionInfo,
                                             defect: cleanChartText(this.t(tag))
                                         });
                                     }
+                                });
+                            } else if (issueCategory === 'Food Safety' || issueCategory === 'Quality') {
+                                // Preserve category information even when a record has a category
+                                // but no explicit defect tag.
+                                categoryCounts[issueCategory]++;
+                                categoryDetails[issueCategory].push({
+                                    ...inspectionInfo,
+                                    defect: ''
                                 });
                             }
                         });
@@ -4625,6 +4658,7 @@
 
                     const sum = object => Object.values(object).reduce((a, b) => a + (Number(b) || 0), 0);
                     const resultTotal = sum(resultsCount);
+                    const categoryTotal = sum(categoryCounts);
                     const defectTotal = sum(defectCounts);
                     const percent = (value, total) => total > 0 ? (Number(value) / total) * 100 : 0;
                     const percentText = value => (Number.isFinite(value) ? value : 0).toFixed(1) + '%';
@@ -4634,6 +4668,7 @@
                         categories: canvases[1],
                         defects: canvases[2]
                     };
+
                     const destroy = key => {
                         const canvas = canvasForKey[key];
                         const existing = canvas && canvas.__referenceSamplesChart;
@@ -4643,6 +4678,7 @@
                         }
                         if (this.chartInstances) this.chartInstances[key] = null;
                     };
+
                     const remember = (key, chart) => {
                         const canvas = canvasForKey[key];
                         if (canvas) canvas.__referenceSamplesChart = chart;
@@ -4680,7 +4716,7 @@
                         }
                     };
 
-                    // Results distribution
+                    // Results distribution remains linked to inspection results and notes.
                     try {
                         destroy('results');
                         this.chartInstances.results = remember('results', new ChartCtor(canvases[0], {
@@ -4688,7 +4724,12 @@
                             data: {
                                 labels: [this.t('Accepted'), this.t('Accepted with Notes'), this.t('Rejected'), this.t('Shelf Life Expired')],
                                 datasets: [{
-                                    data: [resultsCount['Accepted'], resultsCount['Accepted with Notes'], resultsCount['Rejected'], resultsCount['Shelf Life Expired']],
+                                    data: [
+                                        resultsCount['Accepted'],
+                                        resultsCount['Accepted with Notes'],
+                                        resultsCount['Rejected'],
+                                        resultsCount['Shelf Life Expired']
+                                    ],
                                     backgroundColor: ['#22c55e', '#3b82f6', '#ef4444', '#6b7280']
                                 }]
                             },
@@ -4735,20 +4776,27 @@
                         console.error('[Charts] Results chart failed:', err);
                     }
 
-                    // Product defects by issue: one real bar for each requested defect.
+                    // Food Safety vs Quality: counts come from the actual defect tags/categories
+                    // recorded against product inspections, not from sample totals.
                     try {
                         destroy('categories');
-                        const values = defectDefinitions.map(def => defectCounts[def.key]);
-                        const percentages = values.map(value => percent(value, defectTotal));
+                        const values = [
+                            categoryCounts['Food Safety'],
+                            categoryCounts['Quality']
+                        ];
+                        const percentages = values.map(value => percent(value, categoryTotal));
+
                         this.chartInstances.categories = remember('categories', new ChartCtor(canvases[1], {
                             type: 'bar',
                             data: {
-                                labels: defectDefinitions.map(def => this.t(def.key)),
+                                labels: [
+                                    this.lang === 'ar' ? 'سلامة الغذاء' : 'Food Safety',
+                                    this.lang === 'ar' ? 'الجودة' : 'Quality'
+                                ],
                                 datasets: [{
-                                    label: this.lang === 'ar' ? 'نسبة العيب' : 'Defect Percentage',
+                                    label: this.lang === 'ar' ? 'نسبة العيوب' : 'Defect Percentage',
                                     data: percentages,
-                                    backgroundColor: defectDefinitions.map(def => def.color),
-                                    borderColor: defectDefinitions.map(def => def.color),
+                                    backgroundColor: ['#ef4444', '#eab308'],
                                     borderWidth: 1
                                 }]
                             },
@@ -4757,25 +4805,31 @@
                                 maintainAspectRatio: false,
                                 animation: false,
                                 scales: {
-                                    x: { ticks: { autoSkip: false, maxRotation: 55, minRotation: 35, font: { size: 10 } } },
-                                    y: { beginAtZero: true, max: 100, ticks: { stepSize: 20, callback: value => value + '%' } }
+                                    x: { ticks: { autoSkip: false } },
+                                    y: {
+                                        beginAtZero: true,
+                                        max: 100,
+                                        ticks: { stepSize: 20, callback: value => value + '%' }
+                                    }
                                 },
                                 plugins: {
                                     legend: { display: false },
                                     tooltip: {
                                         callbacks: {
                                             label(context) {
-                                                const def = defectDefinitions[context.dataIndex];
-                                                const count = defectCounts[def.key] || 0;
-                                                const category = def.category === 'Food Safety'
-                                                    ? (this.lang === 'ar' ? 'سلامة الغذاء' : 'Food Safety')
-                                                    : (this.lang === 'ar' ? 'الجودة' : 'Quality');
-                                                const details = defectDetails[def.key] || [];
+                                                const category = context.dataIndex === 0 ? 'Food Safety' : 'Quality';
+                                                const count = categoryCounts[category] || 0;
+                                                const details = categoryDetails[category] || [];
                                                 const products = uniqueDetailLines(details, d => d.product);
+                                                const defects = uniqueDetailLines(details, d => d.defect);
                                                 const notes = uniqueDetailLines(details, d => d.note);
                                                 const lines = [
-                                                    category + ': ' + count + ' | ' + percentText(percentages[context.dataIndex])
+                                                    (this.lang === 'ar'
+                                                        ? (category === 'Food Safety' ? 'سلامة الغذاء' : 'الجودة')
+                                                        : category) +
+                                                    ': ' + count + ' | ' + percentText(percentages[context.dataIndex])
                                                 ];
+                                                if (defects.length) lines.push((this.lang === 'ar' ? 'العيوب: ' : 'Defects: ') + defects.join('، '));
                                                 if (products.length) lines.push((this.lang === 'ar' ? 'الأصناف: ' : 'Products: ') + products.join('، '));
                                                 if (notes.length) lines.push((this.lang === 'ar' ? 'الملاحظات: ' : 'Notes: ') + notes.join(' | '));
                                                 return lines;
@@ -4786,12 +4840,13 @@
                             },
                             plugins: [barPercentLabels]
                         }));
-                        this.chartInstances.categories.$referencePercentTotal = defectTotal;
+
+                        this.chartInstances.categories.$referencePercentTotal = categoryTotal;
                     } catch (err) {
-                        console.error('[Charts] Defect comparison chart failed:', err);
+                        console.error('[Charts] Food Safety vs Quality chart failed:', err);
                     }
 
-                    // Top defects chart
+                    // Top 5 recurring defects: ranked from the actual defect tags stored on inspections.
                     try {
                         destroy('defects');
                         const entries = defectDefinitions
@@ -4799,14 +4854,16 @@
                             .filter(entry => entry[1] > 0)
                             .sort((a, b) => b[1] - a[1])
                             .slice(0, 5);
+
                         const topTotal = entries.reduce((total, entry) => total + entry[1], 0);
                         const percentages = entries.map(entry => percent(entry[1], topTotal));
+
                         this.chartInstances.defects = remember('defects', new ChartCtor(canvases[2], {
                             type: 'bar',
                             data: {
                                 labels: entries.map(entry => this.t(entry[0])),
                                 datasets: [{
-                                    label: this.lang === 'ar' ? 'نسبة العيوب' : 'Defect Percentage',
+                                    label: this.lang === 'ar' ? 'نسبة تكرار العيوب' : 'Defect Recurrence Percentage',
                                     data: percentages,
                                     backgroundColor: '#6366f1'
                                 }]
@@ -4817,7 +4874,11 @@
                                 maintainAspectRatio: false,
                                 animation: false,
                                 scales: {
-                                    x: { beginAtZero: true, max: 100, ticks: { stepSize: 20, callback: value => value + '%' } }
+                                    x: {
+                                        beginAtZero: true,
+                                        max: 100,
+                                        ticks: { stepSize: 20, callback: value => value + '%' }
+                                    }
                                 },
                                 plugins: {
                                     legend: { display: false },
@@ -4826,13 +4887,19 @@
                                             label(context) {
                                                 const entry = entries[context.dataIndex];
                                                 const key = entry ? entry[0] : '';
+                                                const count = entry ? entry[1] : 0;
                                                 const details = defectDetails[key] || [];
                                                 const products = uniqueDetailLines(details, d => d.product);
                                                 const notes = uniqueDetailLines(details, d => d.note);
-                                                const count = entry ? entry[1] : 0;
+                                                const category = uniqueDetailLines(details, d =>
+                                                    d.category === 'Food Safety'
+                                                        ? (this.lang === 'ar' ? 'سلامة الغذاء' : 'Food Safety')
+                                                        : (this.lang === 'ar' ? 'الجودة' : 'Quality')
+                                                );
                                                 const lines = [
                                                     count + ' | ' + percentText(percentages[context.dataIndex] || 0)
                                                 ];
+                                                if (category.length) lines.push((this.lang === 'ar' ? 'التصنيف: ' : 'Category: ') + category.join('، '));
                                                 if (products.length) lines.push((this.lang === 'ar' ? 'الأصناف: ' : 'Products: ') + products.join('، '));
                                                 if (notes.length) lines.push((this.lang === 'ar' ? 'الملاحظات: ' : 'Notes: ') + notes.join(' | '));
                                                 return lines;
@@ -4843,6 +4910,7 @@
                             },
                             plugins: [barPercentLabels]
                         }));
+
                         this.chartInstances.defects.$referencePercentTotal = topTotal;
                     } catch (err) {
                         console.error('[Charts] Top defects chart failed:', err);

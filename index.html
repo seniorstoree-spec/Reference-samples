@@ -4894,13 +4894,39 @@
                             this.showToast(this.lang === 'ar' ? 'الرسم البياني غير متاح حاليًا' : 'Chart is not available', 'error');
                             return;
                         }
+
+                        // Temporarily enlarge the canvas for export only so the
+                        // downloaded image contains the complete chart without
+                        // cropping the upper bars or labels.
+                        const canvas = chart.canvas;
+                        const originalWidth = canvas.width;
+                        const originalHeight = canvas.height;
+                        const labelCount = Array.isArray(chart.data?.labels) ? chart.data.labels.length : 1;
+                        const exportWidth = type === 'defects' ? Math.max(1400, originalWidth) : Math.max(1200, originalWidth);
+                        const exportHeight = type === 'defects'
+                            ? Math.max(700, labelCount * 90 + 180)
+                            : Math.max(700, originalHeight * 3);
+
+                        chart.resize(exportWidth, exportHeight);
+                        chart.update('none');
+                        const imageData = chart.toBase64Image('image/png', 1);
+
+                        // Restore the dashboard canvas to its original size.
+                        chart.resize(originalWidth, originalHeight);
+                        chart.update('none');
+
                         const link = document.createElement('a');
                         link.download = 'Dashboard_' + (type === 'categories' ? 'Product_Defects_By_Category' : 'Top_Product_Defects') + '_' + new Date().toISOString().split('T')[0] + '.png';
-                        link.href = chart.toBase64Image('image/png', 1);
+                        link.href = imageData;
                         link.click();
-                        this.showToast(this.lang === 'ar' ? 'تم تصدير الرسم البياني كصورة' : 'Chart exported as image');
+                        this.showToast(this.lang === 'ar' ? 'تم تصدير الرسم البياني كاملًا دون قص' : 'Full chart exported without cropping');
                     } catch (err) {
                         console.error('Chart Export Error:', err);
+                        try {
+                            const chart = type === 'categories' ? this.chartInstances.categories : this.chartInstances.defects;
+                            chart?.resize?.();
+                            chart?.update?.('none');
+                        } catch (_) {}
                         this.showToast(this.lang === 'ar' ? 'حدث خطأ أثناء تصدير الرسم البياني' : 'Chart export failed', 'error');
                     }
                 },

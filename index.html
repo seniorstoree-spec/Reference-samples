@@ -397,7 +397,7 @@
         </section>
 
         <!-- Analytics & Charts Dashboard -->
-        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6" v-show="filteredSamples.length > 0">
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6" v-show="samples.length > 0">
             <!-- Results Distribution -->
             <div class="bg-white rounded-lg shadow-md p-5 border border-gray-200">
                 <h3 class="text-sm font-bold text-gray-700 mb-4">{{ t('chartResultsDist') }}</h3>
@@ -4544,7 +4544,25 @@
                     }
 
                     const ChartCtor = window.Chart;
-                    const samples = Array.isArray(this.filteredSamples) ? this.filteredSamples : [];
+                    const allSamples = Array.isArray(this.samples) ? this.samples : [];
+                    // Dashboard charts must never disappear because the Active/Archived/Rejected
+                    // tab happens to be selected. They are driven by the dashboard dataset.
+                    let samples = allSamples;
+                    if (this.activeKpiFilter) {
+                        samples = allSamples.filter(sample => {
+                            const status = this.getStatus(sample);
+                            const inspections = Array.isArray(sample.inspections) ? sample.inspections : [];
+                            if (this.activeKpiFilter === 'dueToday') {
+                                return ['Active', 'Near Expiry'].includes(status) &&
+                                    inspections.some(insp => this.getInspectionStatus(insp) === 'Due Today');
+                            }
+                            if (this.activeKpiFilter === 'nearExpiry') return status === 'Near Expiry';
+                            if (this.activeKpiFilter === 'accepted') return inspections.some(insp => insp.result === 'Accepted');
+                            if (this.activeKpiFilter === 'acceptedNotes') return inspections.some(insp => insp.result === 'Accepted with Notes');
+                            if (this.activeKpiFilter === 'rejected') return inspections.some(insp => insp.result === 'Rejected');
+                            return true;
+                        });
+                    }
                     const resultsCount = { 'Accepted': 0, 'Accepted with Notes': 0, 'Rejected': 0, 'Shelf Life Expired': 0 };
                     const defectDefinitions = [
                         { key: 'Insect/Larvae infestation', category: 'Food Safety', color: '#ef4444' },
@@ -4578,11 +4596,24 @@
                     const percent = (value, total) => total > 0 ? (Number(value) / total) * 100 : 0;
                     const percentText = value => (Number.isFinite(value) ? value : 0).toFixed(1) + '%';
 
+                    const canvasForKey = {
+                        results: canvases[0],
+                        categories: canvases[1],
+                        defects: canvases[2]
+                    };
                     const destroy = key => {
-                        if (this.chartInstances[key]) {
-                            try { this.chartInstances[key].destroy(); } catch (_) {}
-                            this.chartInstances[key] = null;
+                        const canvas = canvasForKey[key];
+                        const existing = canvas && canvas.__referenceSamplesChart;
+                        if (existing) {
+                            try { existing.destroy(); } catch (_) {}
+                            try { delete canvas.__referenceSamplesChart; } catch (_) { canvas.__referenceSamplesChart = null; }
                         }
+                        if (this.chartInstances) this.chartInstances[key] = null;
+                    };
+                    const remember = (key, chart) => {
+                        const canvas = canvasForKey[key];
+                        if (canvas) canvas.__referenceSamplesChart = chart;
+                        return chart;
                     };
 
                     const barPercentLabels = {
@@ -4619,7 +4650,7 @@
                     // Results distribution
                     try {
                         destroy('results');
-                        this.chartInstances.results = new ChartCtor(canvases[0], {
+                        this.chartInstances.results = remember('results', new ChartCtor(canvases[0], {
                             type: 'doughnut',
                             data: {
                                 labels: [this.t('Accepted'), this.t('Accepted with Notes'), this.t('Rejected'), this.t('Shelf Life Expired')],
@@ -4657,7 +4688,7 @@
                                     }
                                 }
                             }
-                        });
+                        }));
                     } catch (err) {
                         console.error('[Charts] Results chart failed:', err);
                     }
@@ -4667,7 +4698,7 @@
                         destroy('categories');
                         const values = defectDefinitions.map(def => defectCounts[def.key]);
                         const percentages = values.map(value => percent(value, defectTotal));
-                        this.chartInstances.categories = new ChartCtor(canvases[1], {
+                        this.chartInstances.categories = remember('categories', new ChartCtor(canvases[1], {
                             type: 'bar',
                             data: {
                                 labels: defectDefinitions.map(def => this.t(def.key)),
@@ -4704,7 +4735,7 @@
                                 }
                             },
                             plugins: [barPercentLabels]
-                        });
+                        }));
                         this.chartInstances.categories.$referencePercentTotal = defectTotal;
                     } catch (err) {
                         console.error('[Charts] Defect comparison chart failed:', err);
@@ -4720,7 +4751,7 @@
                             .slice(0, 5);
                         const topTotal = entries.reduce((total, entry) => total + entry[1], 0);
                         const percentages = entries.map(entry => percent(entry[1], topTotal));
-                        this.chartInstances.defects = new ChartCtor(canvases[2], {
+                        this.chartInstances.defects = remember('defects', new ChartCtor(canvases[2], {
                             type: 'bar',
                             data: {
                                 labels: entries.map(entry => this.t(entry[0])),
@@ -4751,7 +4782,7 @@
                                 }
                             },
                             plugins: [barPercentLabels]
-                        });
+                        }));
                         this.chartInstances.defects.$referencePercentTotal = topTotal;
                     } catch (err) {
                         console.error('[Charts] Top defects chart failed:', err);
@@ -4763,7 +4794,11 @@
                             this.showToast(this.lang === 'ar' ? 'مكتبة الرسم البياني غير متاحة' : 'Chart library is unavailable', 'error');
                             return;
                         }
-                        const chart = type === 'categories' ? this.chartInstances.categories : this.chartInstances.defects;
+                        const exportCanvasElement = type === 'categories'
+                            ? document.getElementById('chartCategory')
+                            : document.getElementById('chartDefects');
+                        const chart = exportCanvasElement?.__referenceSamplesChart ||
+                            (type === 'categories' ? this.chartInstances.categories : this.chartInstances.defects);
                         if (!chart || !chart.canvas) {
                             this.showToast(this.lang === 'ar' ? 'الرسم البياني غير متاح حاليًا' : 'Chart is not available', 'error');
                             return;

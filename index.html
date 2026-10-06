@@ -27,8 +27,6 @@
         }
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { direction: rtl; text-align: right; }
         .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
@@ -1746,6 +1744,8 @@
                         defects: null
                     },
                     _chartRetryTimer: null,
+                _chartLoadPromise: null,
+                _xlsxLoadPromise: null,
                     // Shared-data safety: Supabase must finish the first sync before any
                     // localStorage-backed state is allowed to be persisted to the shared row.
                     _supabaseInitialSyncCompleted: false,
@@ -1907,12 +1907,9 @@
                     
                     
                 this.updateHtmlDir();
-                this.$nextTick(() => {
-                    this.updateCharts();
-                });
-                this.$nextTick(() => {
-                    this.updateCharts();
-                });
+                if (this.currentSection === 'dashboard') {
+                    this.$nextTick(() => this.updateCharts());
+                }
             },
             beforeUnmount() {
                 clearTimeout(this._chartRetryTimer);
@@ -1972,14 +1969,6 @@
                         this.modalForm.defectTags = [];
                     }
                 },
-                filteredSamples: {
-                    deep: true,
-                    handler() {
-                        this.$nextTick(() => {
-                            this.updateCharts();
-                        });
-                    }
-                }
             },
             computed: {
                 computedShelfLifeMonths() {
@@ -3243,15 +3232,16 @@
                     this.closeChangePasswordModal();
                     this.showToast(this.lang === 'ar' ? 'تم تغيير كلمة المرور بنجاح' : 'Password changed successfully');
                 },
-                handleExcelUpload(event) {
+                async handleExcelUpload(event) {
                     console.log("Excel file selected");
                     if (!event.target.files || event.target.files.length === 0) {
                         return;
                     }
                     const file = event.target.files[0];
 
-                    if (typeof window.XLSX === 'undefined') {
-                        this.showToast(this.lang === 'ar' ? 'مكتبة Excel غير محملة' : 'Excel library not loaded', 'error');
+                    const xlsxReady = await this.ensureXlsxLibrary();
+                    if (!xlsxReady) {
+                        this.showToast(this.lang === 'ar' ? 'تعذر تحميل مكتبة Excel' : 'Could not load Excel library', 'error');
                         return;
                     }
 
@@ -4506,13 +4496,57 @@
                     this.kpiDrilldown.open = false;
                     this.kpiDrilldown.rows = [];
                 },
+                async ensureChartLibrary() {
+                    if (typeof window.Chart !== 'undefined') return true;
+                    if (this._chartLoadPromise) return this._chartLoadPromise;
+                    this._chartLoadPromise = new Promise((resolve) => {
+                        const existing = document.querySelector('script[data-reference-chartjs="1"]');
+                        if (existing) {
+                            existing.addEventListener('load', () => resolve(typeof window.Chart !== 'undefined'), { once: true });
+                            existing.addEventListener('error', () => resolve(false), { once: true });
+                            return;
+                        }
+                        const script = document.createElement('script');
+                        script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+                        script.async = true;
+                        script.dataset.referenceChartjs = '1';
+                        script.onload = () => resolve(typeof window.Chart !== 'undefined');
+                        script.onerror = () => resolve(false);
+                        document.head.appendChild(script);
+                    }).finally(() => { this._chartLoadPromise = null; });
+                    return this._chartLoadPromise;
+                },
+                async ensureXlsxLibrary() {
+                    if (typeof window.XLSX !== 'undefined') return true;
+                    if (this._xlsxLoadPromise) return this._xlsxLoadPromise;
+                    this._xlsxLoadPromise = new Promise((resolve) => {
+                        const existing = document.querySelector('script[data-reference-xlsx="1"]');
+                        if (existing) {
+                            existing.addEventListener('load', () => resolve(typeof window.XLSX !== 'undefined'), { once: true });
+                            existing.addEventListener('error', () => resolve(false), { once: true });
+                            return;
+                        }
+                        const script = document.createElement('script');
+                        script.src = 'https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js';
+                        script.async = true;
+                        script.dataset.referenceXlsx = '1';
+                        script.onload = () => resolve(typeof window.XLSX !== 'undefined');
+                        script.onerror = () => resolve(false);
+                        document.head.appendChild(script);
+                    }).finally(() => { this._xlsxLoadPromise = null; });
+                    return this._xlsxLoadPromise;
+                },
                 updateCharts() {
+                    // Charts are only needed on the dashboard. Avoid doing expensive
+                    // Chart.js work while the user is on forms, archive, catalog, etc.
+                    if (this.currentSection !== 'dashboard') return;
                     // Analytics source of truth:
                     // Active + Archived + Rejected + Deleted samples.
                     // Charts measure defective samples and samples with notes, not just inspection rows.
                     if (typeof window.Chart === 'undefined') {
-                        clearTimeout(this._chartRetryTimer);
-                        this._chartRetryTimer = setTimeout(() => this.updateCharts(), 500);
+                        this.ensureChartLibrary().then((ready) => {
+                            if (ready && this.currentSection === 'dashboard') this.$nextTick(() => this.updateCharts());
+                        });
                         return;
                     }
 
@@ -4970,8 +5004,9 @@
                         this.showToast(this.lang === 'ar' ? 'حدث خطأ أثناء تصدير الرسم البياني: ' + (err?.message || '') : 'Chart export failed: ' + (err?.message || ''), 'error');
                     }
                 },
-                exportKpiData(type) {
+                async exportKpiData(type) {
                     try {
+                        if (!(await this.ensureXlsxLibrary())) throw new Error('Excel library could not be loaded');
                         const allSamples = Array.isArray(this.samples) ? this.samples : [];
                         const matches = {
                             dueToday: sample => Array.isArray(sample.inspections) && sample.inspections.some(insp => this.getInspectionStatus(insp) === 'Due Today'),
@@ -5052,8 +5087,9 @@
                         this.showToast(this.lang === 'ar' ? 'فشل تصدير بيانات المؤشر: ' + (err?.message || '') : 'KPI export failed: ' + (err?.message || ''), 'error');
                     }
                 },
-                exportCSV() {
+                async exportCSV() {
                     try {
+                        if (!(await this.ensureXlsxLibrary())) throw new Error('Excel library could not be loaded');
                         const sourceSamples = Array.isArray(this.samples) ? this.samples : [];
                         if (sourceSamples.length === 0) {
                             this.showToast(this.t('noRecordsExport'), 'error');

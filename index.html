@@ -2479,17 +2479,36 @@
                         return result;
                     };
 
+                    // Keep the server catalog as the stable base, but place any catalog
+                    // records that exist only locally at the very beginning. This is important
+                    // because a newly added product is inserted with unshift() and then merged
+                    // with Supabase during the save/refresh cycle. Without this ordering rule,
+                    // the server-first Map would move the new product back to the bottom.
+                    const serverKeys = new Set();
                     server.forEach(item => {
                         const key = this.getCatalogKey(item);
-                        if (key) byKey.set(key, { ...item });
+                        if (key) {
+                            serverKeys.add(key);
+                            byKey.set(key, { ...item });
+                        }
                     });
+                    const localOnly = [];
                     local.forEach(item => {
                         const key = this.getCatalogKey(item);
                         if (!key) return;
                         const existing = byKey.get(key);
-                        byKey.set(key, existing ? mergeItem(existing, item) : { ...item });
+                        if (existing) {
+                            byKey.set(key, mergeItem(existing, item));
+                        } else {
+                            const localItem = { ...item };
+                            byKey.set(key, localItem);
+                            localOnly.push(localItem);
+                        }
                     });
-                    return Array.from(byKey.values());
+                    return [...localOnly, ...Array.from(byKey.values()).filter(item => {
+                        const key = this.getCatalogKey(item);
+                        return !localOnly.some(localItem => this.getCatalogKey(localItem) === key);
+                    })];
                 },
                 async refreshDeletedItems() {
                     try {

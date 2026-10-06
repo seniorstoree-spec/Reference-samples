@@ -4576,19 +4576,52 @@
                         { key: 'Packaging/Label mismatch', category: 'Quality', color: '#eab308' }
                     ];
                     const defectCounts = {};
-                    defectDefinitions.forEach(def => { defectCounts[def.key] = 0; });
+                    const defectDetails = {};
+                    const resultDetails = {};
+                    defectDefinitions.forEach(def => {
+                        defectCounts[def.key] = 0;
+                        defectDetails[def.key] = [];
+                    });
+                    Object.keys(resultsCount).forEach(result => { resultDetails[result] = []; });
+
+                    const cleanChartText = value => String(value ?? '').replace(/\\s+/g, ' ').trim();
 
                     samples.forEach(sample => {
                         const inspections = Array.isArray(sample.inspections) ? sample.inspections : [];
+                        const productName = cleanChartText(this.t(sample.productName) || sample.productName || '-');
                         inspections.forEach(insp => {
-                            if (Object.prototype.hasOwnProperty.call(resultsCount, insp.result)) resultsCount[insp.result]++;
+                            if (!insp) return;
+                            const result = cleanChartText(insp.result);
+                            const note = cleanChartText(insp.notes);
+                            const issueCategory = cleanChartText(insp.issueCategory ? this.t(insp.issueCategory) : '');
+                            const inspectionInfo = {
+                                product: productName,
+                                batch: cleanChartText(sample.batchNumber),
+                                date: cleanChartText(sample.productionDate),
+                                note,
+                                issueCategory
+                            };
+                            if (Object.prototype.hasOwnProperty.call(resultsCount, insp.result)) {
+                                resultsCount[insp.result]++;
+                                resultDetails[insp.result].push(inspectionInfo);
+                            }
                             if (Array.isArray(insp.defectTags)) {
                                 insp.defectTags.forEach(tag => {
-                                    if (Object.prototype.hasOwnProperty.call(defectCounts, tag)) defectCounts[tag]++;
+                                    if (Object.prototype.hasOwnProperty.call(defectCounts, tag)) {
+                                        defectCounts[tag]++;
+                                        defectDetails[tag].push({
+                                            ...inspectionInfo,
+                                            defect: cleanChartText(this.t(tag))
+                                        });
+                                    }
                                 });
                             }
                         });
                     });
+
+                    const uniqueDetailLines = (details, formatter) => [...new Set(
+                        details.map(formatter).map(cleanChartText).filter(Boolean)
+                    )];
 
                     const sum = object => Object.values(object).reduce((a, b) => a + (Number(b) || 0), 0);
                     const resultTotal = sum(resultsCount);
@@ -4682,7 +4715,16 @@
                                         callbacks: {
                                             label(context) {
                                                 const value = Number(context.raw) || 0;
-                                                return context.label + ': ' + value + ' (' + percentText(percent(value, resultTotal)) + ')';
+                                                const key = ['Accepted', 'Accepted with Notes', 'Rejected', 'Shelf Life Expired'][context.dataIndex];
+                                                const details = resultDetails[key] || [];
+                                                const products = uniqueDetailLines(details, d => d.product);
+                                                const notes = uniqueDetailLines(details, d => d.note);
+                                                const lines = [
+                                                    context.label + ': ' + value + ' (' + percentText(percent(value, resultTotal)) + ')'
+                                                ];
+                                                if (products.length) lines.push((this.lang === 'ar' ? 'الأصناف: ' : 'Products: ') + products.join('، '));
+                                                if (notes.length) lines.push((this.lang === 'ar' ? 'الملاحظات: ' : 'Notes: ') + notes.join(' | '));
+                                                return lines;
                                             }
                                         }
                                     }
@@ -4728,7 +4770,15 @@
                                                 const category = def.category === 'Food Safety'
                                                     ? (this.lang === 'ar' ? 'سلامة الغذاء' : 'Food Safety')
                                                     : (this.lang === 'ar' ? 'الجودة' : 'Quality');
-                                                return category + ': ' + count + ' | ' + percentText(percentages[context.dataIndex]);
+                                                const details = defectDetails[def.key] || [];
+                                                const products = uniqueDetailLines(details, d => d.product);
+                                                const notes = uniqueDetailLines(details, d => d.note);
+                                                const lines = [
+                                                    category + ': ' + count + ' | ' + percentText(percentages[context.dataIndex])
+                                                ];
+                                                if (products.length) lines.push((this.lang === 'ar' ? 'الأصناف: ' : 'Products: ') + products.join('، '));
+                                                if (notes.length) lines.push((this.lang === 'ar' ? 'الملاحظات: ' : 'Notes: ') + notes.join(' | '));
+                                                return lines;
                                             }
                                         }
                                     }
@@ -4775,7 +4825,17 @@
                                         callbacks: {
                                             label(context) {
                                                 const entry = entries[context.dataIndex];
-                                                return (entry ? entry[1] : 0) + ' | ' + percentText(percentages[context.dataIndex] || 0);
+                                                const key = entry ? entry[0] : '';
+                                                const details = defectDetails[key] || [];
+                                                const products = uniqueDetailLines(details, d => d.product);
+                                                const notes = uniqueDetailLines(details, d => d.note);
+                                                const count = entry ? entry[1] : 0;
+                                                const lines = [
+                                                    count + ' | ' + percentText(percentages[context.dataIndex] || 0)
+                                                ];
+                                                if (products.length) lines.push((this.lang === 'ar' ? 'الأصناف: ' : 'Products: ') + products.join('، '));
+                                                if (notes.length) lines.push((this.lang === 'ar' ? 'الملاحظات: ' : 'Notes: ') + notes.join(' | '));
+                                                return lines;
                                             }
                                         }
                                     }

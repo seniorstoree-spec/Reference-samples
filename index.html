@@ -4607,7 +4607,21 @@
                             responsive: true,
                             maintainAspectRatio: false,
                             plugins: {
-                                legend: { position: 'bottom' },
+                                legend: {
+                                    position: 'bottom',
+                                    labels: {
+                                        generateLabels: chart => {
+                                            const labels = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                                            return labels.map(item => {
+                                                const value = Number(chart.data.datasets[0]?.data[item.index]) || 0;
+                                                return {
+                                                    ...item,
+                                                    text: item.text + ' — ' + formatChartPercent(percent(value, resultTotal))
+                                                };
+                                            });
+                                        }
+                                    }
+                                },
                                 tooltip: {
                                     callbacks: {
                                         label: context => {

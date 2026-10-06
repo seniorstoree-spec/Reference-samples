@@ -98,70 +98,32 @@
                 <svg class="w-16 h-16 sm:w-18 sm:h-18 text-blue-600 mb-4 sm:mb-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                 <h2 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-2"><span v-text="t('loginTitle')"></span></h2>
                 <p class="text-gray-500 mb-5 sm:mb-6 text-center text-sm"><span v-text="t('loginSubtitle')"></span></p>
-                
-                <div v-if="auth.error" class="w-full bg-red-50 text-red-600 px-4 py-3 rounded-lg mb-6 text-sm font-bold border border-red-200 text-center animate-pulse">
-                    <span v-text="auth.error"></span>
-                </div>
+                <div v-if="auth.error" class="w-full bg-red-50 text-red-600 px-4 py-3 rounded-lg mb-6 text-sm font-bold border border-red-200 text-center animate-pulse"><span v-text="auth.error"></span></div>
                 <div class="w-full bg-blue-50 border border-blue-200 rounded-xl p-3.5 sm:p-4 mb-5 text-blue-900 shadow-sm text-sm">
                     <div class="font-bold mb-1"><span v-text="isSignupMode ? t('createAccount') : t('secureSignIn')"></span></div>
-                    <div class="text-blue-800/80">
-                        <span v-text="isSignupMode
-                            ? (authMode === 'username' ? t('createUsernameAccountHint') : t('createEmailAccountHint'))
-                            : t('secureAuthHint')"></span>
-                    </div>
+                    <div class="text-blue-800/80"><span v-text="isSignupMode ? t('createUsernameAccountHint') : t('secureAuthHint')"></span></div>
                 </div>
-
-                <div class="w-full bg-gray-100 p-1 rounded-xl flex gap-1 mb-1">
-                    <button type="button" @click.prevent="selectAuthMode('email')" :aria-pressed="authMode === 'email'" :class="authMode === 'email' ? 'bg-white shadow text-blue-700 ring-2 ring-blue-200' : 'text-gray-500'" class="flex-1 py-2.5 rounded-lg font-bold text-sm transition">
-                        <span v-text="t('emailAccount')"></span>
-                    </button>
-                    <button type="button" @click.prevent="selectAuthMode('username')" :aria-pressed="authMode === 'username'" :class="authMode === 'username' ? 'bg-white shadow text-blue-700 ring-2 ring-blue-200' : 'text-gray-500'" class="flex-1 py-2.5 rounded-lg font-bold text-sm transition">
-                        <span v-text="t('usernameAccount')"></span>
-                    </button>
-                </div>
-
                 <form @submit.prevent="handleLogin" class="w-full flex flex-col gap-4 sm:gap-5">
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">
-                            <span v-text="authMode === 'username' ? t('username') : t('emailAddress')"></span>
-                        </label>
-                        <input v-if="authMode === 'username'" type="text" v-model="loginForm.username" autocomplete="username" minlength="3" maxlength="30" pattern="[A-Za-z0-9._-]+" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow text-center text-lg" placeholder="مثال: ahmed01" dir="ltr" required>
-                        <input v-else type="email" v-model="loginForm.email" autocomplete="email" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow text-center text-lg" placeholder="name@example.com" dir="ltr" required>
-                        <p v-if="authMode === 'username'" class="text-xs text-gray-500 mt-1"><span v-text="t('usernameHelp')"></span></p>
+                        <label class="block text-sm font-bold text-gray-700 mb-2"><span v-text="t('username')"></span></label>
+                        <input type="text" v-model="loginForm.username" autocomplete="username" minlength="3" maxlength="30" pattern="[A-Za-z0-9._-]+" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow text-center text-lg" placeholder="مثال: ahmed01" dir="ltr" required>
+                        <p class="text-xs text-gray-500 mt-1"><span v-text="t('usernameHelp')"></span></p>
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2"><span v-text="t('password')"></span></label>
                         <div class="relative">
                             <input :type="showLoginPassword ? 'text' : 'password'" v-model="loginForm.password" autocomplete="current-password" minlength="6" class="w-full px-4 py-3 pe-12 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow text-center text-xl tracking-widest" placeholder="••••••••" dir="ltr" required>
                             <button type="button" @click="showLoginPassword = !showLoginPassword" class="absolute top-1/2 -translate-y-1/2 start-3 text-gray-500 hover:text-blue-700 p-1" :aria-label="showLoginPassword ? t('hidePassword') : t('showPassword')" :title="showLoginPassword ? t('hidePassword') : t('showPassword')">
-                                <svg v-if="!showLoginPassword" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z"></path>
-                                    <circle cx="12" cy="12" r="2.5" stroke-width="1.8"></circle>
-                                </svg>
-                                <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="m3 3 18 18M10.6 6.2A9.8 9.8 0 0 1 12 6c6 0 9.5 6 9.5 6a18.2 18.2 0 0 1-3.1 3.7M6.2 6.3C3.7 8.2 2.5 12 2.5 12s3.5 5 9.5 5c1.3 0 2.5-.3 3.5-.8"></path>
-                                </svg>
+                                <svg v-if="!showLoginPassword" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z"></path><circle cx="12" cy="12" r="2.5" stroke-width="1.8"></circle></svg>
+                                <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="m3 3 18 18M10.6 6.2A9.8 9.8 0 0 1 12 6c6 0 9.5 6 9.5 6a18.2 18.2 0 0 1-3.1 3.7M6.2 6.3C3.7 8.2 2.5 12 2.5 12s3.5 5 9.5 5 9.5-5 9.5-5Z"></path></svg>
                             </button>
                         </div>
                     </div>
-                    <div v-if="isSignupMode && authMode === 'username'" class="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 text-xs">
-                        <span v-text="t('usernameAccountWarning')"></span>
-                    </div>
+                    <div v-if="isSignupMode" class="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 text-xs"><span v-text="t('usernameAccountWarning')"></span></div>
                     <button type="submit" :disabled="auth.loading" :class="auth.loading ? 'opacity-70 cursor-wait' : ''" class="w-full bg-blue-600 hover:bg-blue-700 disabled:hover:bg-blue-600 text-white font-bold py-3.5 px-4 rounded-lg shadow-md transition-colors text-lg mt-2">
                         <span v-text="auth.loading ? t('checking') : (isSignupMode ? t('createAccount') : t('signIn'))"></span>
                     </button>
-                    <div v-if="!isSignupMode && authMode === 'email'" class="flex items-center justify-center gap-3 text-sm">
-                        <button type="button" @click="openForgotPasswordModal" class="text-red-600 hover:text-red-800 font-bold">
-                            <span v-text="t('forgotPasswordLink')"></span>
-                        </button>
-                        <span class="text-gray-300">|</span>
-                        <button type="button" @click="toggleSignupMode" class="text-blue-700 hover:text-blue-900 font-bold">
-                            <span v-text="t('createNewAccount')"></span>
-                        </button>
-                    </div>
-                    <button v-else type="button" @click="toggleSignupMode" class="text-blue-700 hover:text-blue-900 font-bold text-sm">
-                        <span v-text="isSignupMode ? t('alreadyHaveAccount') : t('createNewAccount')"></span>
-                    </button>
+                    <button type="button" @click="toggleSignupMode" class="text-blue-700 hover:text-blue-900 font-bold text-sm"><span v-text="isSignupMode ? t('alreadyHaveAccount') : t('createNewAccount')"></span></button>
                 </form>
             </div>
         </div>
@@ -257,7 +219,7 @@
             <div class="flex flex-col items-end gap-3">
                 <div v-if="auth.isAuthenticated" class="w-full flex items-center justify-end gap-2 text-sm font-bold text-gray-700 bg-blue-50 border border-blue-100 px-3 py-2 rounded-lg">
                     <span class="text-gray-500">{{ lang === 'ar' ? 'المستخدم:' : 'User:' }}</span>
-                    <span class="text-blue-800">{{ auth.username || auth.email }}</span>
+                    <span class="text-blue-800">{{ auth.username }}</span>
                 </div>
                 <div class="flex items-center gap-2">
                     <button v-if="auth.role === 'admin'" @click="appView = 'admin'" class="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-3 py-1.5 rounded font-bold text-sm transition">لوحة المطور</button>
@@ -317,7 +279,7 @@
             <div class="p-3 border-t bg-gray-50">
                 <div v-if="auth.isAuthenticated" class="text-xs bg-blue-50 border border-blue-100 rounded-lg p-3">
                     <div class="text-gray-500 font-bold mb-1">{{ lang === 'ar' ? 'المستخدم الحالي' : 'Current User' }}</div>
-                    <div class="text-blue-900 font-black truncate">{{ auth.username || auth.email }}</div>
+                    <div class="text-blue-900 font-black truncate">{{ auth.username }}</div>
                 </div>
             </div>
         </aside>
@@ -328,7 +290,7 @@
         <div class="bg-gradient-to-r from-blue-900 to-blue-700 text-white rounded-xl shadow-lg p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
                 <div class="text-blue-100 text-sm font-bold">{{ lang === 'ar' ? 'لوحة تحكم نظام العينات المرجعية' : 'Reference Samples Dashboard' }}</div>
-                <div class="text-2xl font-black mt-1">{{ lang === 'ar' ? 'مرحباً، ' : 'Welcome, ' }}{{ auth.username || auth.email || '-' }}</div>
+                <div class="text-2xl font-black mt-1">{{ lang === 'ar' ? 'مرحباً، ' : 'Welcome, ' }}{{ auth.username || '-' }}</div>
             </div>
             <div class="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-sm font-bold">
                 {{ lang === 'ar' ? 'جاهز للتوسع بإضافة مؤشرات وتقارير مستقبلية' : 'Ready for future KPIs and reports' }}
@@ -1362,86 +1324,6 @@
             <img :src="fullScreenPhotoUrl" class="max-w-full max-h-[90vh] object-contain rounded shadow-2xl" @click.stop>
         </div>
 
-        <!-- Forgot Password Modal -->
-        <div v-if="showForgotPasswordModal" class="fixed inset-0 bg-black/60 z-[110] flex items-center justify-center p-4">
-            <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-fade-in">
-                <div class="px-6 py-4 border-b bg-gray-50 flex justify-between items-center">
-                    <h3 class="font-bold text-lg text-gray-800 flex items-center gap-2">
-                        <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15 7a2 2 0 0 1 2 2v1h1a3 3 0 0 1 3 3v4a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3v-4a3 3 0 0 1 3-3h7V9a3 3 0 0 0-6 0v1"></path>
-                        </svg>
-                        <span v-text="t('forgotPasswordTitle')"></span>
-                    </h3>
-                    <button @click="closeForgotPasswordModal" class="text-gray-400 hover:text-gray-600 focus:outline-none">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    </button>
-                </div>
-                <form @submit.prevent="requestPasswordReset" class="p-6 flex flex-col gap-4">
-                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900 leading-relaxed">
-                        <span v-text="t('forgotPasswordDescription')"></span>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">
-                            <span v-text="t('emailAddress')"></span>
-                        </label>
-                        <input type="email" v-model="forgotPasswordForm.email" autocomplete="email" dir="ltr" required class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 text-center font-mono">
-                        <p class="text-xs text-gray-500 mt-2">
-                            <span v-text="t('currentRecoveryMailbox')"></span>
-                        </p>
-                    </div>
-                    <div v-if="forgotPasswordForm.message" class="bg-green-50 border border-green-200 text-green-800 px-3 py-3 rounded-lg text-sm font-bold text-center">
-                        <span v-text="forgotPasswordForm.message"></span>
-                    </div>
-                    <div v-if="forgotPasswordForm.error" class="bg-red-50 border border-red-200 text-red-700 px-3 py-3 rounded-lg text-sm font-bold text-center">
-                        <span v-text="forgotPasswordForm.error"></span>
-                    </div>
-                    <div class="flex justify-end gap-3 mt-2 pt-4 border-t border-gray-100">
-                        <button type="button" @click="closeForgotPasswordModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 font-bold">
-                            <span v-text="t('cancel')"></span>
-                        </button>
-                        <button type="submit" :disabled="forgotPasswordForm.loading" class="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60 font-bold shadow-sm">
-                            <span v-text="forgotPasswordForm.loading ? t('sendingResetLink') : t('sendResetLink')"></span>
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <!-- Password Recovery Modal -->
-        <div v-if="showPasswordRecoveryModal" class="fixed inset-0 bg-black/70 z-[120] flex items-center justify-center p-4">
-            <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-fade-in">
-                <div class="px-6 py-4 border-b bg-blue-50">
-                    <h3 class="font-bold text-lg text-blue-900">
-                        <span v-text="t('recoveryTitle')"></span>
-                    </h3>
-                    <p class="text-sm text-blue-700 mt-1">
-                        <span v-text="t('recoveryDescription')"></span>
-                    </p>
-                </div>
-                <form @submit.prevent="completePasswordRecovery" class="p-6 flex flex-col gap-4">
-                    <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2" v-text="t('newPassword')"></label>
-                        <div class="relative">
-                            <input :type="showRecoveryPassword ? 'text' : 'password'" v-model="recoveryPasswordForm.password" minlength="6" required dir="ltr" class="w-full px-4 py-3 pe-12 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 text-center font-mono tracking-widest">
-                            <button type="button" @click="showRecoveryPassword = !showRecoveryPassword" class="absolute top-1/2 -translate-y-1/2 start-3 text-gray-500 hover:text-blue-700 p-1">
-                                <span class="text-xs font-bold" v-text="showRecoveryPassword ? t('hidePassword') : t('showPassword')"></span>
-                            </button>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2" v-text="t('confirmPassword')"></label>
-                        <input type="password" v-model="recoveryPasswordForm.confirmPassword" minlength="6" required dir="ltr" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 text-center font-mono tracking-widest">
-                    </div>
-                    <div v-if="recoveryPasswordForm.error" class="bg-red-50 border border-red-200 text-red-700 px-3 py-3 rounded-lg text-sm font-bold text-center">
-                        <span v-text="recoveryPasswordForm.error"></span>
-                    </div>
-                    <button type="submit" :disabled="recoveryPasswordForm.loading" class="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold py-3 rounded-lg shadow">
-                        <span v-text="recoveryPasswordForm.loading ? t('savingPassword') : t('saveNewPassword')"></span>
-                    </button>
-                </form>
-            </div>
-        </div>
-
         <!-- Change Password Modal -->
         <div v-if="showChangePasswordModal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
             <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-fade-in">
@@ -1629,9 +1511,7 @@
             "createAccount": { en: "Create account", ar: "إنشاء حساب جديد" },
             "secureSignIn": { en: "Secure sign in", ar: "تسجيل الدخول الآمن" },
             "createUsernameAccountHint": { en: "Create a regular account with a username and password, without entering an email.", ar: "أنشئ حسابًا عاديًا باسم مستخدم وكلمة مرور، بدون إدخال بريد إلكتروني." },
-            "createEmailAccountHint": { en: "Create your account using your email address and password.", ar: "أنشئ حسابك باستخدام البريد الإلكتروني وكلمة المرور." },
             "secureAuthHint": { en: "Authentication is handled through Supabase Auth, not LocalStorage.", ar: "الدخول الآن يتم من خلال Supabase Auth وليس LocalStorage." },
-            "emailAccount": { en: "Email account", ar: "بالبريد الإلكتروني" },
             "usernameAccount": { en: "Username account", ar: "حساب عادي بدون إيميل" },
             "username": { en: "Username", ar: "اسم المستخدم" },
             "usernameHelp": { en: "Use English letters, numbers, dot, underscore or hyphen.", ar: "استخدم حروف إنجليزية وأرقام فقط، ويمكن استخدام . _ -" },
@@ -1639,24 +1519,13 @@
             "usernameAccountWarning": { en: "This account does not use an email. Keep the username and password safe; email password recovery is not available for this account type.", ar: "هذا الحساب لا يحتاج إلى بريد إلكتروني. احفظ اسم المستخدم وكلمة المرور لأن استعادة كلمة المرور عبر البريد غير متاحة لهذا النوع." },
             "checking": { en: "Checking...", ar: "جاري التحقق..." },
             "signIn": { en: "Sign In", ar: "دخول النظام" },
-            "forgotPasswordLink": { en: "Forgot password?", ar: "نسيت كلمة المرور؟" },
             "createNewAccount": { en: "Create a new account", ar: "إنشاء حساب جديد" },
             "alreadyHaveAccount": { en: "I already have an account — Sign in", ar: "لدي حساب بالفعل — تسجيل الدخول" },
-            "forgotPasswordTitle": { en: "Forgot Password", ar: "نسيت كلمة المرور" },
-            "forgotPasswordDescription": { en: "A password reset link will be sent to the account recovery email.", ar: "سيتم إرسال رابط تغيير كلمة المرور إلى البريد المعتمد لاستعادة الحساب." },
-            "emailAddress": { en: "Email address", ar: "البريد الإلكتروني" },
             "currentRecoveryMailbox": { en: "Current recovery mailbox: qc.team@elabdfoods.com", ar: "البريد المحدد حاليًا: qc.team@elabdfoods.com" },
-            "sendingResetLink": { en: "Sending...", ar: "جاري الإرسال..." },
-            "sendResetLink": { en: "Send reset link", ar: "إرسال رابط التغيير" },
-            "recoveryTitle": { en: "Set a new password", ar: "تعيين كلمة مرور جديدة" },
-            "recoveryDescription": { en: "Your recovery link is valid. Enter and save your new password.", ar: "تم فتح رابط الاستعادة. أدخل كلمة المرور الجديدة ثم احفظها." },
             "newPassword": { en: "New password", ar: "كلمة المرور الجديدة" },
             "confirmPassword": { en: "Confirm password", ar: "تأكيد كلمة المرور" },
             "showPassword": { en: "Show", ar: "إظهار" },
             "hidePassword": { en: "Hide", ar: "إخفاء" },
-            "savingPassword": { en: "Saving...", ar: "جاري الحفظ..." },
-            "saveNewPassword": { en: "Save new password", ar: "حفظ كلمة المرور الجديدة" },
-            "passwordRecoveryError": { en: "Unable to complete password recovery.", ar: "تعذر إكمال استعادة كلمة المرور." },
 
             "colMainActions": { en: "Actions", ar: "الإجراءات" },
             "testSampleBtn": { en: "Test Sample", ar: "تسجيل فحص" },
@@ -1793,14 +1662,9 @@
                     auth: { isAuthenticated: false, role: null, username: '', email: null, error: '', loading: false },
                     users: initialUsers,
                     loginForm: { email: '', username: '', password: '' },
-                    authMode: 'email',
+                    authMode: 'username',
                     isSignupMode: false,
                     showLoginPassword: false,
-                    forgotPasswordForm: { email: 'qc.team@elabdfoods.com', loading: false, error: '', message: '' },
-                    showForgotPasswordModal: false,
-                    recoveryPasswordForm: { password: '', confirmPassword: '', loading: false, error: '' },
-                    showRecoveryPassword: false,
-                    showPasswordRecoveryModal: false,
                     adminForm: { newUsername: '', newPassword: '' },
                     changePasswordForm: { oldPassword: '', newPassword: '', confirmPassword: '', error: '' },
                     showChangePasswordModal: false,
@@ -3106,27 +2970,6 @@
                         this.recoveryPasswordForm.loading = false;
                     }
                 },
-                selectAuthMode(mode) {
-                    const nextMode = mode === 'username' ? 'username' : 'email';
-                    this.authMode = nextMode;
-                    this.auth.error = '';
-                    this.loginForm.password = '';
-                    this.showLoginPassword = false;
-                    if (nextMode === 'username') {
-                        this.loginForm.email = '';
-                    } else {
-                        this.loginForm.username = '';
-                    }
-                    this.$nextTick(() => {
-                        const selector = nextMode === 'username'
-                            ? 'input[autocomplete="username"]'
-                            : 'input[autocomplete="email"]';
-                        document.querySelector(selector)?.focus();
-                    });
-                },
-                setAuthMode(mode) {
-                    this.selectAuthMode(mode);
-                },
                 toggleSignupMode() {
                     this.isSignupMode = !this.isSignupMode;
                     this.auth.error = '';
@@ -3180,97 +3023,31 @@
                     if (this.auth.loading) return;
                     this.auth.error = '';
                     this.auth.loading = true;
-
                     try {
                         const pwd = this.loginForm.password || '';
+                        const username = (this.loginForm.username || '').trim().toLowerCase();
+                        if (!/^[a-z0-9._-]{3,30}$/.test(username)) {
+                            this.auth.error = this.lang === 'ar' ? 'اسم المستخدم يجب أن يكون 3-30 حرفًا ويحتوي على حروف إنجليزية أو أرقام أو . _ - فقط' : 'Username must be 3-30 characters and use only letters, numbers, dot, underscore or hyphen';
+                            return;
+                        }
                         if (pwd.length < 6) {
                             this.auth.error = this.lang === 'ar' ? 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' : 'Password must be at least 6 characters';
                             return;
                         }
-
-                        let email = '';
-                        let displayName = '';
-                        let resolvedAuthMode = this.authMode;
-
-                        // Accept either login tab without allowing a stale tab selection
-                        // to block a valid username/email login.
-                        const rawIdentifier = this.authMode === 'username'
-                            ? (this.loginForm.username || '').trim()
-                            : (this.loginForm.email || '').trim();
-                        const identifier = rawIdentifier.toLowerCase();
-
-                        if (this.authMode === 'username' || (identifier && !identifier.includes('@'))) {
-                            resolvedAuthMode = 'username';
-                            const username = identifier;
-                            if (!/^[a-z0-9._-]{3,30}$/.test(username)) {
-                                this.auth.error = this.lang === 'ar'
-                                    ? 'اسم المستخدم يجب أن يكون 3-30 حرفًا ويحتوي على حروف إنجليزية أو أرقام أو . _ - فقط'
-                                    : 'Username must be 3-30 characters and use only letters, numbers, dot, underscore or hyphen';
-                                return;
-                            }
-                            email = this.buildLocalAuthEmail(username);
-                            displayName = username;
-                        } else {
-                            resolvedAuthMode = 'email';
-                            email = identifier;
-                            if (!email) {
-                                this.auth.error = this.lang === 'ar' ? 'يرجى إدخال البريد الإلكتروني أو اسم المستخدم' : 'Please enter your email or username';
-                                return;
-                            }
-                            displayName = email.split('@')[0];
-                        }
-
+                        const email = this.buildLocalAuthEmail(username);
+                        let authUser = null;
                         if (this.isSignupMode) {
-                            if (resolvedAuthMode === 'username') {
-                                // Public username registration: use the same deterministic internal
-                                // email used by username login. No real email address is requested.
-                                const { data, error } = await supabaseClient.auth.signUp({
-                                    email,
-                                    password: pwd,
-                                    options: {
-                                        data: {
-                                            username: displayName,
-                                            display_name: displayName,
-                                            account_type: 'username',
-                                            reference_role: 'user'
-                                        }
-                                    }
-                                });
-                                if (error) {
-                                    console.error('[Auth] Username signup error:', error);
-                                    this.auth.error = /already registered|already exists/i.test(error.message || '')
-                                        ? (this.lang === 'ar' ? 'اسم المستخدم موجود بالفعل.' : 'Username already exists.')
-                                        : (error.message || (this.lang === 'ar' ? 'تعذر إنشاء الحساب.' : 'Could not create account.'));
-                                    return;
-                                }
-                                this.loginForm.password = '';
-                                this.isSignupMode = false;
-                                if (data.session?.user) {
-                                    await this.applySupabaseUser(data.session.user);
-                                    this.appView = 'qc';
-                                    await this.initializeSupabaseSync();
-                                } else {
-                                    this.auth.error = this.lang === 'ar'
-                                        ? 'تم إنشاء الحساب لكنه يحتاج تفعيل البريد الداخلي من إعدادات Supabase. لا يمكن للحسابات بدون إيميل إتمام هذه الخطوة؛ لذلك يجب تعطيل تأكيد البريد لهذا النظام.'
-                                        : 'The account was created but requires email confirmation. Username-only accounts cannot complete that step; email confirmation must be disabled for this system.';
-                                }
-                                return;
-                            }
-
                             const { data, error } = await supabaseClient.auth.signUp({
                                 email,
                                 password: pwd,
-                                options: {
-                                    data: {
-                                        display_name: displayName,
-                                        account_type: 'email'
-                                    },
-                                    emailRedirectTo: window.location.href
-                                }
+                                options: { data: { username, display_name: username, account_type: 'username', reference_role: 'user' } }
                             });
                             if (error) {
-                                console.error('[Auth] Signup error:', error);
-                                this.auth.error = error.message || (this.lang === 'ar' ? 'تعذر إنشاء الحساب' : 'Could not create account');                                return;
+                                console.error('[Auth] Username signup error:', error);
+                                this.auth.error = /already registered|already exists/i.test(error.message || '')
+                                    ? (this.lang === 'ar' ? 'اسم المستخدم موجود بالفعل.' : 'Username already exists.')
+                                    : (error.message || (this.lang === 'ar' ? 'تعذر إنشاء الحساب.' : 'Could not create account.'));
+                                return;
                             }
                             this.loginForm.password = '';
                             this.isSignupMode = false;
@@ -3280,117 +3057,57 @@
                                 await this.initializeSupabaseSync();
                             } else {
                                 this.auth.error = this.lang === 'ar'
-                                    ? 'تم إنشاء الحساب. افتح رسالة تأكيد البريد الإلكتروني ثم ارجع وسجّل الدخول.'
-                                    : 'Account created. Confirm the email address, then return and sign in.';
+                                    ? 'تم إنشاء الحساب. إذا كان تأكيد البريد مفعّلًا في Supabase، يجب تعطيله لهذا النظام لأن الدخول يتم باسم المستخدم فقط.'
+                                    : 'Account created. If email confirmation is enabled in Supabase, disable it because this system uses username-only login.';
                             }
                             return;
                         }
-
-                        let authUser = null;
-
-                        if (resolvedAuthMode === 'username') {
-                            // Primary path: protected server-side username resolver.
-                            // Fallback: direct Supabase password auth using the same deterministic
-                            // internal email. This keeps login working even if the Edge Function
-                            // is temporarily unavailable.
-                            let edgeSucceeded = false;
-                            try {
-                                const controller = new AbortController();
-                                const timeout = setTimeout(() => controller.abort(), 10000);
-                                const response = await fetch(SUPABASE_URL + '/functions/v1/username-login', {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'apikey': SUPABASE_PUBLISHABLE_KEY
-                                    },
-                                    body: JSON.stringify({ username: displayName, password: pwd }),
-                                    signal: controller.signal
-                                });
-                                clearTimeout(timeout);
-                                const result = await response.json().catch(() => ({}));
-
-                                if (response.ok && result.access_token && result.refresh_token) {
-                                    const { data: sessionData, error: sessionError } = await supabaseClient.auth.setSession({
-                                        access_token: result.access_token,
-                                        refresh_token: result.refresh_token
-                                    });
-                                    if (!sessionError && sessionData?.user) {
-                                        authUser = sessionData.user;
-                                        edgeSucceeded = true;
-                                    }
-                                } else if (result.error === 'email_not_confirmed') {
-                                    this.auth.error = this.lang === 'ar'
-                                        ? 'هذا الحساب غير مُفعّل. يجب تفعيله من لوحة المطور.'
-                                        : 'This account is not activated. Activate it from the developer panel.';
-                                    return;
-                                }
-                            } catch (edgeError) {
-                                console.warn('[Auth] Username Edge Function unavailable; using direct Auth fallback.', edgeError);
-                            }
-
-                            if (!edgeSucceeded) {
-                                const { data, error } = await supabaseClient.auth.signInWithPassword({
-                                    email,
-                                    password: pwd
-                                });
-                                if (error || !data?.user) {
-                                    console.error('[Auth] Username fallback sign-in error:', error);
-                                    const message = error?.message || '';
-                                    this.auth.error = /invalid login credentials/i.test(message)
-                                        ? (this.lang === 'ar' ? 'اسم المستخدم أو كلمة المرور غير صحيحة.' : 'Username or password is incorrect.')
-                                        : (this.lang === 'ar' ? 'تعذر تسجيل الدخول. تأكد من اسم المستخدم وكلمة المرور.' : 'Could not sign in. Check the username and password.');
-                                    return;
-                                }
-                                authUser = data.user;
-                            }
-                        } else {
-                            const { data, error } = await supabaseClient.auth.signInWithPassword({
-                                email,
-                                password: pwd
+                        let edgeSucceeded = false;
+                        try {
+                            const controller = new AbortController();
+                            const timeout = setTimeout(() => controller.abort(), 10000);
+                            const response = await fetch(SUPABASE_URL + '/functions/v1/username-login', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_PUBLISHABLE_KEY },
+                                body: JSON.stringify({ username, password: pwd }),
+                                signal: controller.signal
                             });
-                            if (error || !data?.user) {
-                                console.error('[Auth] Email sign-in error:', error);
-                                const message = error?.message || '';
-                                if (error?.code === 'email_not_confirmed' || /email not confirmed/i.test(message)) {
-                                    this.auth.error = this.lang === 'ar'
-                                        ? 'الحساب غير مُفعّل. أكّد البريد الإلكتروني ثم حاول مرة أخرى.'
-                                        : 'This account is not activated. Confirm the email address and try again.';
-                                } else if (/invalid login credentials/i.test(message)) {
-                                    this.auth.error = this.lang === 'ar'
-                                        ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة.'
-                                        : 'Email or password is incorrect.';
-                                } else {
-                                    this.auth.error = this.lang === 'ar'
-                                        ? 'تعذر تسجيل الدخول: ' + message
-                                        : 'Login failed: ' + (message || 'Unknown authentication error');
+                            clearTimeout(timeout);
+                            const result = await response.json().catch(() => ({}));
+                            if (response.ok && result.access_token && result.refresh_token) {
+                                const { data: sessionData, error: sessionError } = await supabaseClient.auth.setSession({ access_token: result.access_token, refresh_token: result.refresh_token });
+                                if (!sessionError && sessionData?.user) {
+                                    authUser = sessionData.user;
+                                    edgeSucceeded = true;
                                 }
+                            } else if (result.error === 'email_not_confirmed') {
+                                this.auth.error = this.lang === 'ar' ? 'هذا الحساب غير مُفعّل. يجب تفعيله من لوحة المطور.' : 'This account is not activated. Activate it from the developer panel.';
+                                return;
+                            }
+                        } catch (edgeError) {
+                            console.warn('[Auth] Username Edge Function unavailable; using direct Auth fallback.', edgeError);
+                        }
+                        if (!edgeSucceeded) {
+                            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pwd });
+                            if (error || !data?.user) {
+                                console.error('[Auth] Username sign-in error:', error);
+                                this.auth.error = /invalid login credentials/i.test(error?.message || '')
+                                    ? (this.lang === 'ar' ? 'اسم المستخدم أو كلمة المرور غير صحيحة.' : 'Username or password is incorrect.')
+                                    : (this.lang === 'ar' ? 'تعذر تسجيل الدخول. تأكد من اسم المستخدم وكلمة المرور.' : 'Could not sign in. Check your username and password.');
                                 return;
                             }
                             authUser = data.user;
                         }
-
-                        if (!authUser) {
-                            this.auth.error = this.lang === 'ar' ? 'تعذر إنشاء جلسة تسجيل الدخول.' : 'Could not establish a login session.';
-                            return;
-                        }
-
                         await this.applySupabaseUser(authUser);
                         this.loginForm.password = '';
+                        this.loginForm.username = username;
+                        this.loginForm.email = '';
                         this.showLoginPassword = false;
                         this.appView = 'qc';
-
-                        try {
-                            await this.initializeSupabaseSync();
-                        } catch (syncError) {
-                            console.error('[Auth] Post-login sync failed:', syncError);
-                            // Auth has already succeeded; never return the user to the login screen
-                            // because a data-sync problem is independent of authentication.
-                        }
+                        try { await this.initializeSupabaseSync(); } catch (syncError) { console.error('[Auth] Post-login sync failed:', syncError); }
                     } catch (loginError) {
                         console.error('[Auth] Unexpected login exception:', loginError);
-                        this.auth.error = this.lang === 'ar'
-                            ? 'حدث خطأ أثناء الاتصال بخدمة تسجيل الدخول. حاول مرة أخرى.'
-                            : 'A login service error occurred. Please try again.';
+                        this.auth.error = this.lang === 'ar' ? 'حدث خطأ أثناء الاتصال بخدمة تسجيل الدخول. حاول مرة أخرى.' : 'A login service error occurred. Please try again.';
                     } finally {
                         this.auth.loading = false;
                     }

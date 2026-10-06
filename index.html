@@ -2364,13 +2364,33 @@
                         return true;
                     });
 
-                    // Active Samples are shown newest-first. Use createdAt when available,
-                    // then fall back to the sample id for older records.
+                    // Active Samples are ALWAYS sorted by Production Date, not registration time.
+                    // This keeps the list correct even when a sample is registered after
+                    // its actual production date. Registration time is used only as a stable
+                    // tie-breaker when two samples share the same production date.
                     if (this.currentTab === 'active') {
+                        const toDateValue = (value) => {
+                            const raw = String(value || '').trim();
+                            if (!raw) return 0;
+                            const normalized = /^\d{2}\/\d{2}\/\d{4}$/.test(raw)
+                                ? raw.split('/').reverse().join('-')
+                                : raw;
+                            const timestamp = new Date(normalized + (normalized.length === 10 ? 'T00:00:00' : '')).getTime();
+                            return Number.isFinite(timestamp) ? timestamp : 0;
+                        };
+
                         filtered.sort((a, b) => {
-                            const timeA = new Date(a.createdAt || 0).getTime() || Number(a.id || 0);
-                            const timeB = new Date(b.createdAt || 0).getTime() || Number(b.id || 0);
-                            return timeB - timeA;
+                            const productionA = toDateValue(a.productionDate);
+                            const productionB = toDateValue(b.productionDate);
+
+                            // Newer production date first. Never let createdAt override this.
+                            if (productionA !== productionB) return productionB - productionA;
+
+                            // Same production date: keep a deterministic order without
+                            // changing the primary production-date sorting rule.
+                            const createdA = new Date(a.createdAt || 0).getTime() || Number(a.id || 0);
+                            const createdB = new Date(b.createdAt || 0).getTime() || Number(b.id || 0);
+                            return createdB - createdA;
                         });
                     }
                     return filtered;

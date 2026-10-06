@@ -317,35 +317,40 @@
                           activeKpiFilter === 'dueToday' ? 'ring-2 ring-yellow-400 ring-offset-2' : '']">
                 <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">{{ t('kpiDueToday') }}</h3>
                 <p class="text-4xl font-black text-gray-800">{{ formatNum(inspectionsDueToday.length) }}</p>
-                <span class="text-[11px] text-gray-400 mt-1">{{ lang === 'ar' ? 'اضغط لعرض البيانات' : 'Click to view data' }}</span>
+                <div class="mt-2 text-xs font-black text-yellow-700">{{ formatPercent(dueTodayRate) }}</div>
+                <span class="text-[11px] text-gray-400 mt-1">{{ lang === 'ar' ? 'من إجمالي الفحوصات المستحقة اليوم' : 'Of inspections due today' }}</span>
             </div>
             <div @click="openKpiDrilldown('nearExpiry')" 
                  :class="['bg-white rounded-lg shadow-md p-5 border-s-4 border-orange-400 flex flex-col justify-center transition-all cursor-pointer hover:-translate-y-1 hover:shadow-lg', 
                           activeKpiFilter === 'nearExpiry' ? 'ring-2 ring-orange-400 ring-offset-2' : '']">
                 <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">{{ t('kpiExpiringWeek') }}</h3>
                 <p class="text-4xl font-black text-gray-800">{{ formatNum(samplesNearExpiry.length) }}</p>
-                <span class="text-[11px] text-gray-400 mt-1">{{ lang === 'ar' ? 'اضغط لعرض البيانات' : 'Click to view data' }}</span>
+                <div class="mt-2 text-xs font-black text-orange-700">{{ formatPercent(nearExpiryRate) }}</div>
+                <span class="text-[11px] text-gray-400 mt-1">{{ lang === 'ar' ? 'من العينات النشطة' : 'Of active samples' }}</span>
             </div>
             <div @click="openKpiDrilldown('accepted')" 
                  :class="['bg-white rounded-lg shadow-md p-5 border-s-4 border-green-500 flex flex-col justify-center transition-all cursor-pointer hover:-translate-y-1 hover:shadow-lg', 
                           activeKpiFilter === 'accepted' ? 'ring-2 ring-green-500 ring-offset-2' : '']">
                 <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">{{ lang === 'ar' ? 'المقبولة' : 'Accepted' }}</h3>
                 <p class="text-4xl font-black text-gray-800">{{ formatNum(totalAcceptedCount) }}</p>
-                <span class="text-[11px] text-gray-400 mt-1">{{ lang === 'ar' ? 'اضغط لعرض البيانات' : 'Click to view data' }}</span>
+                <div class="mt-2 text-xs font-black text-green-700">{{ formatPercent(acceptanceRate) }}</div>
+                <span class="text-[11px] text-gray-400 mt-1">{{ lang === 'ar' ? 'من إجمالي الفحوصات المكتملة' : 'Of completed inspections' }}</span>
             </div>
             <div @click="openKpiDrilldown('acceptedNotes')" 
                  :class="['bg-white rounded-lg shadow-md p-5 border-s-4 border-blue-500 flex flex-col justify-center transition-all cursor-pointer hover:-translate-y-1 hover:shadow-lg', 
                           activeKpiFilter === 'acceptedNotes' ? 'ring-2 ring-blue-500 ring-offset-2' : '']">
                 <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">{{ lang === 'ar' ? 'المقبولة بملاحظات' : 'Accepted with Notes' }}</h3>
                 <p class="text-4xl font-black text-gray-800">{{ formatNum(totalAcceptedWithNotesCount) }}</p>
-                <span class="text-[11px] text-gray-400 mt-1">{{ lang === 'ar' ? 'اضغط لعرض البيانات' : 'Click to view data' }}</span>
+                <div class="mt-2 text-xs font-black text-blue-700">{{ formatPercent(acceptedWithNotesRate) }}</div>
+                <span class="text-[11px] text-gray-400 mt-1">{{ lang === 'ar' ? 'من إجمالي المقبول' : 'Of accepted inspections' }}</span>
             </div>
             <div @click="openKpiDrilldown('rejected')" 
                  :class="['bg-white rounded-lg shadow-md p-5 border-s-4 border-red-500 flex flex-col justify-center transition-all cursor-pointer hover:-translate-y-1 hover:shadow-lg', 
                           activeKpiFilter === 'rejected' ? 'ring-2 ring-red-500 ring-offset-2' : '']">
                 <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">{{ t('kpiTotalRejected') }}</h3>
                 <p class="text-4xl font-black text-gray-800">{{ formatNum(totalRejectedCount) }}</p>
-                <span class="text-[11px] text-gray-400 mt-1">{{ lang === 'ar' ? 'اضغط لعرض البيانات' : 'Click to view data' }}</span>
+                <div class="mt-2 text-xs font-black text-red-700">{{ formatPercent(rejectionRate) }}</div>
+                <span class="text-[11px] text-gray-400 mt-1">{{ lang === 'ar' ? 'من إجمالي الفحوصات المكتملة' : 'Of completed inspections' }}</span>
             </div>
         </section>
 
@@ -2075,11 +2080,47 @@
                 totalRejectedCount() {
                     let count = 0;
                     this.samples.forEach(s => {
-                        s.inspections.forEach(i => {
+                        (Array.isArray(s.inspections) ? s.inspections : []).forEach(i => {
                             if (i.result === 'Rejected') count++;
                         });
                     });
                     return count;
+                },
+                completedInspectionsCount() {
+                    let count = 0;
+                    this.samples.forEach(s => {
+                        (Array.isArray(s.inspections) ? s.inspections : []).forEach(i => {
+                            if (['Accepted', 'Accepted with Notes', 'Rejected'].includes(i.result)) count++;
+                        });
+                    });
+                    return count;
+                },
+                acceptanceRate() {
+                    const total = this.completedInspectionsCount;
+                    return total ? ((this.totalAcceptedCount + this.totalAcceptedWithNotesCount) / total) * 100 : 0;
+                },
+                rejectionRate() {
+                    const total = this.completedInspectionsCount;
+                    return total ? (this.totalRejectedCount / total) * 100 : 0;
+                },
+                acceptedWithNotesRate() {
+                    const accepted = this.totalAcceptedCount + this.totalAcceptedWithNotesCount;
+                    return accepted ? (this.totalAcceptedWithNotesCount / accepted) * 100 : 0;
+                },
+                activeSamplesRate() {
+                    const total = this.samples.length;
+                    return total ? (this.activeSamplesCount / total) * 100 : 0;
+                },
+                nearExpiryRate() {
+                    const activeTotal = this.activeSamplesCount;
+                    return activeTotal ? (this.samplesNearExpiry.length / activeTotal) * 100 : 0;
+                },
+                archivedSamplesRate() {
+                    const total = this.samples.length;
+                    return total ? (this.archivedSamplesCount / total) * 100 : 0;
+                },
+                formatPercent(value) {
+                    return Number(value || 0).toFixed(1) + '%';
                 },
                 activeSamplesCount() {
                     return this.samples.filter(s => ['Active', 'Near Expiry'].includes(this.getStatus(s))).length;

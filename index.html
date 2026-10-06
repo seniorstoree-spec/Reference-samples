@@ -4616,7 +4616,7 @@
                     };
 
                     if (this.chartInstances.results) this.chartInstances.results.destroy();
-                    this.chartInstances.results = new ChartCtor(canvasResults, {
+                    this.chartInstances.results = new window.Chart(canvasResults, {
                         type: 'doughnut',
                         data: {
                             labels: [this.t('Accepted'), this.t('Accepted with Notes'), this.t('Rejected'), this.t('Shelf Life Expired')],
@@ -4633,7 +4633,7 @@
                                     position: 'bottom',
                                     labels: {
                                         generateLabels: chart => {
-                                            const labels = ChartCtor.defaults.plugins.legend.labels.generateLabels(chart);
+                                            const labels = window.Chart.defaults.plugins.legend.labels.generateLabels(chart);
                                             return labels.map(item => {
                                                 const value = Number(chart.data.datasets[0]?.data[item.index]) || 0;
                                                 return {
@@ -4701,7 +4701,7 @@
                         percent(value, defectComparisonTotal)
                     );
 
-                    this.chartInstances.categories = new ChartCtor(canvasCategories, {
+                    this.chartInstances.categories = new window.Chart(canvasCategories, {
                         type: 'bar',
                         data: {
                             labels: defectDefinitions.map(definition => this.t(definition.key)),
@@ -4773,7 +4773,7 @@
 
                     if (this.chartInstances.defects) this.chartInstances.defects.destroy();
                     const defectPercentages = defectsSorted.map(d => percent(d[1], defectsTotal));
-                    this.chartInstances.defects = new ChartCtor(canvasDefects, {
+                    this.chartInstances.defects = new window.Chart(canvasDefects, {
                         type: 'bar',
                         data: {
                             labels: defectsSorted.map(d => this.t(d[0])),

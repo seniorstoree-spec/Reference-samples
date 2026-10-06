@@ -4889,39 +4889,66 @@
                 },
                 exportChartImage(type) {
                     try {
+                        if (typeof Chart === 'undefined') {
+                            this.showToast(this.lang === 'ar' ? 'مكتبة الرسم البياني غير متاحة' : 'Chart library is unavailable', 'error');
+                            return;
+                        }
                         const chart = type === 'categories' ? this.chartInstances.categories : this.chartInstances.defects;
-                        if (!chart) {
+                        if (!chart || !chart.canvas) {
                             this.showToast(this.lang === 'ar' ? 'الرسم البياني غير متاح حاليًا' : 'Chart is not available', 'error');
                             return;
                         }
-                        const labelCount = Array.isArray(chart.data?.labels) ? chart.data.labels.length : 1;
-                        const exportWidth = type === 'defects' ? 1600 : 1400;
-                        const exportHeight = type === 'defects' ? Math.max(900, labelCount * 95 + 240) : 900;
+
+                        const labels = Array.isArray(chart.data?.labels) ? chart.data.labels : [];
+                        const labelCount = Math.max(labels.length, 1);
+                        const exportWidth = type === 'defects' ? 1800 : Math.max(1600, labelCount * 150);
+                        const exportHeight = type === 'defects'
+                            ? Math.max(1000, labelCount * 110 + 260)
+                            : 1000;
+
                         const exportCanvas = document.createElement('canvas');
-                        exportCanvas.width = exportWidth;
-                        exportCanvas.height = exportHeight;
+                        const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+                        exportCanvas.width = Math.round(exportWidth * dpr);
+                        exportCanvas.height = Math.round(exportHeight * dpr);
+
                         const exportOptions = Object.assign({}, chart.options || {}, {
                             responsive: false,
                             maintainAspectRatio: false,
-                            animation: false
+                            animation: false,
+                            devicePixelRatio: dpr
                         });
-                        const exportConfig = {
-                            type: chart.config.type,
-                            data: JSON.parse(JSON.stringify(chart.data)),
-                            options: exportOptions,
-                            plugins: chart.config.plugins || []
+
+                        const exportData = {
+                            labels: labels.slice(),
+                            datasets: (chart.data?.datasets || []).map(dataset => ({
+                                ...dataset,
+                                data: Array.isArray(dataset.data) ? dataset.data.slice() : dataset.data
+                            }))
                         };
-                        const exportChart = new Chart(exportCanvas.getContext('2d'), exportConfig);
-                        exportChart.resize(exportWidth, exportHeight);
+
+                        const exportChart = new Chart(exportCanvas.getContext('2d'), {
+                            type: chart.config?.type || 'bar',
+                            data: exportData,
+                            options: exportOptions,
+                            plugins: Array.isArray(chart.config?.plugins) ? chart.config.plugins : []
+                        });
+
+                        exportChart.resize(exportCanvas.width, exportCanvas.height);
                         exportChart.update('none');
-                        const imageData = exportChart.toBase64Image('image/png', 1);
+                        exportChart.render();
+
+                        const imageData = exportCanvas.toDataURL('image/png', 1);
                         exportChart.destroy();
+
                         const link = document.createElement('a');
-                        link.download = 'Dashboard_' + (type === 'categories' ? 'Product_Defects_By_Category' : 'Top_Product_Defects') + '_' + new Date().toISOString().split('T')[0] + '.png';
+                        link.download = 'Dashboard_' +
+                            (type === 'categories' ? 'Product_Defects_By_Category' : 'Top_Product_Defects') +
+                            '_' + new Date().toISOString().split('T')[0] + '.png';
                         link.href = imageData;
                         document.body.appendChild(link);
                         link.click();
                         link.remove();
+
                         this.showToast(this.lang === 'ar' ? 'تم تصدير الرسم البياني كاملًا دون قص' : 'Full chart exported without cropping');
                     } catch (err) {
                         console.error('Chart Export Error:', err);

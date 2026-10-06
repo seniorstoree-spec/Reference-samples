@@ -420,8 +420,92 @@
             </div>
         </section>
 
+        <!-- Dashboard Analytics Filters -->
+        <section class="bg-white rounded-lg shadow-md p-5 border border-blue-100">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
+                <div>
+                    <h3 class="text-base font-black text-gray-800">{{ t('dashboardAnalyticsFilter') }}</h3>
+                    <p class="text-xs text-gray-500 mt-1">{{ t('dashboardAnalyticsFilterHint') }}</p>
+                </div>
+                <div class="flex items-center gap-2 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                    <span>{{ t('analyticsFilteredTotal') }}:</span>
+                    <span>{{ formatNum(dashboardAnalyticsFilteredCount) }}</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+                <div class="xl:col-span-2">
+                    <label class="block text-xs font-bold text-gray-700 mb-1">{{ t('analyticsSampleSearch') }}</label>
+                    <input type="text"
+                           v-model.trim="analyticsFilters.searchQuery"
+                           @input="updateDashboardAnalytics"
+                           :placeholder="t('analyticsSampleSearchPlaceholder')"
+                           class="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           dir="auto">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">{{ t('analyticsResultFilter') }}</label>
+                    <select v-model="analyticsFilters.result" @change="updateDashboardAnalytics"
+                            class="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">{{ t('analyticsAllResults') }}</option>
+                        <option value="Accepted">{{ t('analyticsAccepted') }}</option>
+                        <option value="Accepted with Notes">{{ t('analyticsAcceptedNotes') }}</option>
+                        <option value="Rejected">{{ t('analyticsRejected') }}</option>
+                        <option value="Shelf Life Expired">{{ t('analyticsExpired') }}</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">{{ t('analyticsDateMode') }}</label>
+                    <select v-model="analyticsFilters.dateMode" @change="updateDashboardAnalytics"
+                            class="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="date">{{ t('analyticsExactDate') }}</option>
+                        <option value="month">{{ t('analyticsMonth') }}</option>
+                    </select>
+                </div>
+
+                <div class="md:col-span-2 xl:col-span-1 flex items-end">
+                    <button type="button" @click="resetDashboardAnalyticsFilters"
+                            class="w-full px-3 py-2.5 rounded-lg border border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold text-sm transition">
+                        {{ t('analyticsClear') }}
+                    </button>
+                </div>
+            </div>
+
+            <div v-if="analyticsFilters.dateMode === 'date'" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">{{ t('analyticsInspectionDateFrom') }}</label>
+                    <input type="date" v-model="analyticsFilters.dateFrom" @change="updateDashboardAnalytics"
+                           class="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">{{ t('analyticsInspectionDateTo') }}</label>
+                    <input type="date" v-model="analyticsFilters.dateTo" @change="updateDashboardAnalytics"
+                           class="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+
+            <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">{{ t('analyticsInspectionMonthFrom') }}</label>
+                    <input type="month" v-model="analyticsFilters.monthFrom" @change="updateDashboardAnalytics"
+                           class="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">{{ t('analyticsInspectionMonthTo') }}</label>
+                    <input type="month" v-model="analyticsFilters.monthTo" @change="updateDashboardAnalytics"
+                           class="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+
+            <div v-if="dashboardAnalyticsFilterMessage" class="mt-3 text-xs font-bold text-orange-700 bg-orange-50 border border-orange-100 rounded-lg px-3 py-2">
+                {{ dashboardAnalyticsFilterMessage }}
+            </div>
+        </section>
+
         <!-- Analytics & Charts Dashboard -->
-        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6" v-show="samples.length > 0">
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6" v-show="dashboardAnalyticsFilteredCount > 0">
             <!-- Results Distribution -->
             <div class="bg-white rounded-lg shadow-md p-5 border border-gray-200">
                 <h3 class="text-sm font-bold text-gray-700 mb-4">{{ t('chartResultsDist') }}</h3>
@@ -1475,6 +1559,26 @@
             "bracket30Days": { en: "≤ 30 Days", ar: "≤ 30 يوم" },
             "bracketMore30Days": { en: "> 30 Days", ar: "> 30 يوم" },
             "resetFilters": { en: "Reset Filters", ar: "مسح الفلاتر" },
+            "dashboardAnalyticsFilter": { en: "Dashboard Search & Filters", ar: "بحث وفلاتر لوحة التحكم" },
+            "dashboardAnalyticsFilterHint": { en: "Filter all samples that have actually been inspected by the inspection date.", ar: "تصفية جميع العينات التي تم فحصها فعليًا بناءً على تاريخ الفحص." },
+            "analyticsDateMode": { en: "Date filter mode", ar: "طريقة تحديد المدة" },
+            "analyticsExactDate": { en: "Day", ar: "يوم" },
+            "analyticsMonth": { en: "Month", ar: "شهر" },
+            "analyticsInspectionDateFrom": { en: "Inspection date from", ar: "تاريخ الفحص من" },
+            "analyticsInspectionDateTo": { en: "Inspection date to", ar: "تاريخ الفحص إلى" },
+            "analyticsInspectionMonthFrom": { en: "Inspection month from", ar: "شهر الفحص من" },
+            "analyticsInspectionMonthTo": { en: "Inspection month to", ar: "شهر الفحص إلى" },
+            "analyticsSampleSearch": { en: "Search inspected samples", ar: "بحث في العينات التي تم فحصها" },
+            "analyticsSampleSearchPlaceholder": { en: "Search by product or batch number...", ar: "ابحث باسم الصنف أو رقم التشغيلة..." },
+            "analyticsResultFilter": { en: "Inspection result", ar: "نتيجة الفحص" },
+            "analyticsAllResults": { en: "All results", ar: "كل النتائج" },
+            "analyticsAccepted": { en: "Accepted", ar: "مقبولة" },
+            "analyticsAcceptedNotes": { en: "Accepted with Notes", ar: "مقبولة بملاحظات" },
+            "analyticsRejected": { en: "Rejected", ar: "مرفوضة" },
+            "analyticsExpired": { en: "Shelf Life Expired", ar: "انتهاء الصلاحية" },
+            "analyticsApply": { en: "Apply filters", ar: "تطبيق الفلاتر" },
+            "analyticsClear": { en: "Clear dashboard filters", ar: "مسح فلاتر لوحة التحكم" },
+            "analyticsFilteredTotal": { en: "Matching inspected samples", ar: "العينات المفحوصة المطابقة" },
 
             "chartResultsDist": { en: "Inspection Results Distribution", ar: "نسبة نتائج الفحص" },
             "chartCategoryDist": { en: "Food Safety vs. Quality", ar: "سلامة الغذاء مقارنة بالجودة" },
@@ -1740,6 +1844,17 @@
                     currentTab: 'active', // active or archived
 
                     activeKpiFilter: null,
+                    analyticsFilters: {
+                        searchQuery: '',
+                        result: '',
+                        dateMode: 'date',
+                        dateFrom: '',
+                        dateTo: '',
+                        monthFrom: '',
+                        monthTo: ''
+                    },
+                    dashboardAnalyticsFilteredCount: 0,
+                    dashboardAnalyticsFilterMessage: '',
                     kpiDrilldown: { open: false, key: '', title: '', rows: [] },
                     archiveExplorer: { selectedYear: null, selectedMonth: null, selectedProduct: null },
                     rejectedArchiveExplorer: { selectedYear: null, selectedMonth: null, selectedProduct: null },
@@ -1950,7 +2065,10 @@
             watch: {
                 currentSection(newSection) {
                     if (newSection === 'dashboard') {
-                        this.$nextTick(() => this.updateCharts());
+                        this.$nextTick(() => {
+                    this.dashboardAnalyticsFilteredCount = this.getDashboardAnalyticsRecords().length;
+                    this.updateCharts();
+                });
                     }
                 },
                 productCatalog: {
@@ -4424,7 +4542,7 @@
                         }
 
                         if (this.currentSection === 'dashboard') {
-                            this.$nextTick(() => this.updateCharts());
+                            this.updateDashboardAnalytics();
                         }
                     } catch (e) {
                         console.warn('[Page Return] UI recovery skipped:', e);
@@ -4444,6 +4562,7 @@
                     }
                     if (section === 'dashboard') {
                         this.activeKpiFilter = null;
+                        this.$nextTick(() => this.updateDashboardAnalytics());
                     }
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                 },
@@ -4455,6 +4574,129 @@
                     }
                     return 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-100';
                 },
+                getDashboardAnalyticsRecords() {
+                    const activeRecords = Array.isArray(this.samples) ? this.samples : [];
+                    const deletedRecords = Array.isArray(this.deletedSamples) ? this.deletedSamples : [];
+
+                    const getKey = sample => {
+                        try {
+                            return String(this.getSampleKey(sample) || sample.id || sample.sampleId || sample.batchNumber || sample.createdAt || '');
+                        } catch (_) {
+                            return String(sample?.id || sample?.sampleId || sample?.batchNumber || sample?.createdAt || '');
+                        }
+                    };
+
+                    const deletedKeys = new Set(deletedRecords.map(getKey).filter(Boolean));
+                    const allRecords = [
+                        ...activeRecords.filter(sample => !deletedKeys.has(getKey(sample))),
+                        ...deletedRecords.map(sample => Object.assign({}, sample, { __analyticsDeleted: true }))
+                    ];
+
+                    const clean = value => String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+                    const normalizeResult = value => {
+                        const v = clean(value);
+                        if (v === 'accepted' || v === 'مقبولة' || v === 'مقبول') return 'Accepted';
+                        if (v === 'accepted with notes' || v === 'مقبولة بملاحظات' || v === 'مقبول بملاحظات') return 'Accepted with Notes';
+                        if (v === 'rejected' || v === 'مرفوضة' || v === 'مرفوض') return 'Rejected';
+                        if (v === 'shelf life expired' || v === 'انتهاء صلاحية' || v === 'انتهاء الصلاحية') return 'Shelf Life Expired';
+                        return '';
+                    };
+
+                    const sampleResult = sample => {
+                        const inspections = Array.isArray(sample.inspections) ? sample.inspections : [];
+                        const results = inspections.map(i => normalizeResult(i?.result)).filter(Boolean);
+                        const status = clean(this.getStatus(sample));
+                        if (results.includes('Rejected') || status === 'rejected' || status === 'مرفوض') return 'Rejected';
+                        if (results.includes('Shelf Life Expired') || status === 'archived / expired' || status === 'expired' || status === 'منتهي' || status === 'منتهى') return 'Shelf Life Expired';
+                        if (results.includes('Accepted with Notes')) return 'Accepted with Notes';
+                        if (results.includes('Accepted')) return 'Accepted';
+                        return '';
+                    };
+
+                    const matchesDate = sample => {
+                        const f = this.analyticsFilters || {};
+                        const inspections = Array.isArray(sample.inspections) ? sample.inspections : [];
+                        const testedDates = inspections
+                            .map(i => String(i?.testedDate || '').slice(0, 10))
+                            .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))
+                            .sort();
+
+                        // The dashboard is explicitly based on samples that were actually inspected.
+                        if (!testedDates.length) return false;
+
+                        if (f.dateMode === 'month') {
+                            const from = f.monthFrom ? f.monthFrom + '-01' : '';
+                            let to = f.monthTo ? f.monthTo + '-31' : '';
+                            if (f.monthTo) {
+                                const parts = f.monthTo.split('-').map(Number);
+                                const last = new Date(parts[0], parts[1], 0).getDate();
+                                to = f.monthTo + '-' + String(last).padStart(2, '0');
+                            }
+                            if (from && to && from > to) return false;
+                            return testedDates.some(d => (!from || d >= from) && (!to || d <= to));
+                        }
+
+                        const from = f.dateFrom || '';
+                        const to = f.dateTo || '';
+                        if (from && to && from > to) return false;
+                        return testedDates.some(d => (!from || d >= from) && (!to || d <= to));
+                    };
+
+                    const query = clean(this.analyticsFilters?.searchQuery);
+                    const wantedResult = this.analyticsFilters?.result || '';
+
+                    return allRecords.filter(sample => {
+                        const inspections = Array.isArray(sample.inspections) ? sample.inspections : [];
+                        if (!inspections.some(i => i && i.testedDate)) return false;
+
+                        if (query) {
+                            const haystack = clean([
+                                sample.productName,
+                                sample.batchNumber,
+                                ...inspections.map(i => i?.notes || ''),
+                                ...inspections.map(i => i?.rejectionReason || '')
+                            ].join(' '));
+                            if (!haystack.includes(query)) return false;
+                        }
+
+                        if (wantedResult && sampleResult(sample) !== wantedResult) return false;
+                        return matchesDate(sample);
+                    });
+                },
+
+                updateDashboardAnalytics() {
+                    const f = this.analyticsFilters || {};
+                    this.dashboardAnalyticsFilterMessage = '';
+                    if (f.dateMode === 'date' && f.dateFrom && f.dateTo && f.dateFrom > f.dateTo) {
+                        this.dashboardAnalyticsFilterMessage = this.lang === 'ar'
+                            ? 'تاريخ البداية يجب أن يكون قبل أو مساويًا لتاريخ النهاية.'
+                            : 'The start date must be before or equal to the end date.';
+                    } else if (f.dateMode === 'month' && f.monthFrom && f.monthTo && f.monthFrom > f.monthTo) {
+                        this.dashboardAnalyticsFilterMessage = this.lang === 'ar'
+                            ? 'الشهر البداية يجب أن يكون قبل أو مساويًا للشهر النهاية.'
+                            : 'The start month must be before or equal to the end month.';
+                    }
+                    this.dashboardAnalyticsFilteredCount = this.getDashboardAnalyticsRecords().length;
+                    if (this.currentSection === 'dashboard') {
+                        this.$nextTick(() => this.updateCharts());
+                    }
+                },
+
+                resetDashboardAnalyticsFilters() {
+                    this.analyticsFilters = {
+                        searchQuery: '',
+                        result: '',
+                        dateMode: 'date',
+                        dateFrom: '',
+                        dateTo: '',
+                        monthFrom: '',
+                        monthTo: ''
+                    };
+                    this.dashboardAnalyticsFilterMessage = '';
+                    this.dashboardAnalyticsFilteredCount = this.getDashboardAnalyticsRecords().length;
+                    this.$nextTick(() => this.updateCharts());
+                },
+
                 resetFilters() {
                     this.activeKpiFilter = null;
                     this.filters = {
@@ -4567,8 +4809,8 @@
                     if (!this.chartInstances) this.chartInstances = { results: null, categories: null, defects: null };
 
                     const ChartCtor = window.Chart;
-                    const activeRecords = Array.isArray(this.samples) ? this.samples : [];
-                    const deletedRecords = Array.isArray(this.deletedSamples) ? this.deletedSamples : [];
+                    const records = this.getDashboardAnalyticsRecords();
+                    this.dashboardAnalyticsFilteredCount = records.length;
 
                     const getKey = sample => {
                         try {
@@ -4577,12 +4819,6 @@
                             return String(sample?.id || sample?.sampleId || sample?.batchNumber || sample?.createdAt || '');
                         }
                     };
-
-                    const deletedKeys = new Set(deletedRecords.map(getKey).filter(Boolean));
-                    const records = [
-                        ...activeRecords.filter(sample => !deletedKeys.has(getKey(sample))),
-                        ...deletedRecords.map(sample => Object.assign({}, sample, { __analyticsDeleted: true }))
-                    ];
 
                     const bucketFor = sample => {
                         if (sample.__analyticsDeleted) return 'Deleted';

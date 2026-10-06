@@ -4817,16 +4817,17 @@
                         console.error('[Charts] Food Safety vs Quality failed:', err);
                     }
 
-                    // 2) Top 5 recurring defects = unique defective samples across all four buckets.
+                    // 2) All defined defects: one dedicated bar per defect.
+                    // The bar value is the percentage of ALL samples that contain that defect.
+                    // This includes Active + Archived + Rejected + Deleted samples.
                     try {
                         destroy('defects');
-                        const entries = defectDefinitions
-                            .map(def => [def.key, defectCounts[def.key], def.category])
-                            .filter(entry => entry[1] > 0)
-                            .sort((a, b) => b[1] - a[1])
-                            .slice(0, 5);
 
-                        const topTotal = entries.reduce((sum, entry) => sum + entry[1], 0);
+                        const entries = defectDefinitions.map(def => [
+                            def.key,
+                            defectCounts[def.key] || 0,
+                            def.category
+                        ]);
                         const percentages = entries.map(entry => percent(entry[1], totalRecords));
 
                         const chart = new ChartCtor(document.getElementById('chartDefects'), {
@@ -4834,9 +4835,12 @@
                             data: {
                                 labels: entries.map(entry => this.t(entry[0])),
                                 datasets: [{
-                                    label: arabic ? 'نسبة العينات المعيبة' : 'Defective Samples %',
+                                    label: arabic ? 'نسبة العينات التي بها العيب' : 'Percentage of samples with defect',
                                     data: percentages,
-                                    backgroundColor: '#6366f1'
+                                    backgroundColor: entries.map(entry =>
+                                        entry[2] === 'Food Safety' ? '#ef4444' : '#eab308'
+                                    ),
+                                    borderWidth: 1
                                 }]
                             },
                             options: {
@@ -4845,7 +4849,16 @@
                                 maintainAspectRatio: false,
                                 animation: false,
                                 scales: {
-                                    x: { beginAtZero: true, max: 100, ticks: { callback: value => value + '%' } }
+                                    x: {
+                                        beginAtZero: true,
+                                        max: 100,
+                                        ticks: { callback: value => value + '%' }
+                                    },
+                                    y: {
+                                        ticks: {
+                                            autoSkip: false
+                                        }
+                                    }
                                 },
                                 plugins: {
                                     legend: { display: false },
@@ -4863,14 +4876,26 @@
                                                     d.bucket === 'Rejected' ? (arabic ? 'مرفوضة' : 'Rejected') :
                                                     (arabic ? 'محذوفة' : 'Deleted')
                                                 );
-                                                return [
-                                                    (arabic ? 'عدد العينات: ' : 'Samples: ') + entry[1] + ' (' + pct(percentages[context.dataIndex]) + ')',
-                                                    (arabic ? 'التصنيف: ' : 'Category: ') + (entry[2] === 'Food Safety' ? (arabic ? 'سلامة الغذاء' : 'Food Safety') : (arabic ? 'الجودة' : 'Quality')),
-                                                    (arabic ? 'مصادر البيانات: ' : 'Data sources: ') + buckets.join('، '),
-                                                    (arabic ? 'العينات ذات الملاحظات: ' : 'Samples with notes: ') + totalWithNotes,
-                                                    products.length ? (arabic ? 'الأصناف: ' : 'Products: ') + products.join('، ') : '',
-                                                    notes.length ? (arabic ? 'الملاحظات: ' : 'Notes: ') + notes.join(' | ') : ''
-                                                ].filter(Boolean);
+
+                                                const lines = [
+                                                    (arabic ? 'نسبة العينات: ' : 'Samples: ') +
+                                                    entry[1] + ' (' + pct(percentages[context.dataIndex]) + ')',
+                                                    (arabic ? 'التصنيف: ' : 'Category: ') +
+                                                    (entry[2] === 'Food Safety'
+                                                        ? (arabic ? 'سلامة الغذاء' : 'Food Safety')
+                                                        : (arabic ? 'الجودة' : 'Quality')),
+                                                    (arabic ? 'إجمالي العينات: ' : 'Total samples: ') + totalRecords,
+                                                    (arabic ? 'مصادر البيانات: ' : 'Data sources: ') + buckets.join('، ')
+                                                ];
+
+                                                if (products.length) {
+                                                    lines.push((arabic ? 'الأصناف: ' : 'Products: ') + products.join('، '));
+                                                }
+                                                if (notes.length) {
+                                                    lines.push((arabic ? 'الملاحظات: ' : 'Notes: ') + notes.join(' | '));
+                                                }
+
+                                                return lines;
                                             }
                                         }
                                     }
@@ -4878,10 +4903,11 @@
                             },
                             plugins: [barPercentLabels]
                         });
-                        chart.$referencePercentTotal = totalRecords;
+
+                        chart.$referencePercentTotal = 100;
                         remember('defects', chart, document.getElementById('chartDefects'));
                     } catch (err) {
-                        console.error('[Charts] Top defects failed:', err);
+                        console.error('[Charts] Individual defects chart failed:', err);
                     }
 
                     // Results chart: show the overall sample condition, including notes.

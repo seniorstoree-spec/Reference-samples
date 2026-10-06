@@ -2486,8 +2486,48 @@
                     const local = Array.isArray(localSamples) ? localSamples : [];
                     const byKey = new Map();
                     server.forEach(x => { const k=this.getSampleKey(x); if(k) byKey.set(k,x); });
-                    local.forEach(x => { const k=this.getSampleKey(x); if(!k)return; const old=byKey.get(k); if(!old) byKey.set(k,x); else if(new Date(x.updatedAt||0)>new Date(old.updatedAt||0)) byKey.set(k,x); });
-                    return Array.from(byKey.values());
+                    local.forEach(x => {
+                        const k=this.getSampleKey(x);
+                        if(!k) return;
+                        const old=byKey.get(k);
+                        if(!old) byKey.set(k,x);
+                        else if(new Date(x.updatedAt||0)>new Date(old.updatedAt||0)) byKey.set(k,x);
+                    });
+
+                    // IMPORTANT: Keep the master sample collection itself sorted by
+                    // Production Date. This is intentionally done at the data-merge
+                    // level as well as in filteredSamples(), so refresh/login/sync
+                    // cannot restore the old registration-order sequence.
+                    const toProductionTimestamp = (value) => {
+                        const raw = String(value || '').trim();
+                        if (!raw) return 0;
+                        let normalized = raw;
+                        if (/^\\d{2}\\/\\d{2}\\/\\d{4}$/.test(raw)) {
+                            normalized = raw.split('/').reverse().join('-');
+                        }
+                        if (/^\\d{4}-\\d{2}-\\d{2}$/.test(normalized)) {
+                            normalized += 'T00:00:00';
+                        }
+                        const timestamp = new Date(normalized).getTime();
+                        return Number.isFinite(timestamp) ? timestamp : 0;
+                    };
+
+                    const values = Array.from(byKey.values());
+                    values.sort((a, b) => {
+                        const productionA = toProductionTimestamp(a?.productionDate);
+                        const productionB = toProductionTimestamp(b?.productionDate);
+
+                        // Primary rule: newest Production Date first.
+                        if (productionA !== productionB) return productionB - productionA;
+
+                        // Same production date: use registration time only as a
+                        // deterministic tie-breaker; it never overrides Production Date.
+                        const createdA = new Date(a?.createdAt || 0).getTime() || Number(a?.id || 0);
+                        const createdB = new Date(b?.createdAt || 0).getTime() || Number(b?.id || 0);
+                        return createdB - createdA;
+                    });
+
+                    return values;
                 },
                 mergeCatalogSafely(serverCatalog, localCatalog, options = {}) {
                     const server = Array.isArray(serverCatalog) ? serverCatalog : [];

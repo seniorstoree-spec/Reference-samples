@@ -354,6 +354,43 @@
             </div>
         </section>
 
+        <!-- Real Percentage Status Summary -->
+        <section class="bg-white rounded-lg shadow-md p-5 border border-gray-200">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-5">
+                <div>
+                    <h3 class="text-base font-black text-gray-800">{{ lang === 'ar' ? 'التوزيع الحقيقي للعينات' : 'Real Sample Status Distribution' }}</h3>
+                    <p class="text-xs text-gray-500">{{ lang === 'ar' ? 'النسب محسوبة من إجمالي العينات المسجلة حاليًا، بدون أرقام افتراضية.' : 'Percentages are calculated from the currently recorded samples, with no placeholder values.' }}</p>
+                </div>
+                <div class="text-xs font-bold text-gray-500">{{ lang === 'ar' ? 'الإجمالي: ' : 'Total: ' }}{{ formatNum(samples.length) }}</div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="rounded-xl bg-green-50 border border-green-100 p-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-black text-gray-700">{{ lang === 'ar' ? 'نشطة' : 'Active' }}</span>
+                        <span class="text-lg font-black text-green-700">{{ formatPercent(activeSamplesRate) }}</span>
+                    </div>
+                    <div class="mt-3 h-2 bg-white rounded-full overflow-hidden"><div class="h-full bg-green-500 rounded-full" :style="{width: activeSamplesRate + '%'}"></div></div>
+                    <div class="mt-2 text-xs text-gray-500">{{ formatNum(activeSamplesCount) }} / {{ formatNum(samples.length) }}</div>
+                </div>
+                <div class="rounded-xl bg-orange-50 border border-orange-100 p-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-black text-gray-700">{{ lang === 'ar' ? 'قريبة من الانتهاء' : 'Near Expiry' }}</span>
+                        <span class="text-lg font-black text-orange-700">{{ formatPercent((samples.length ? (samplesNearExpiry.length / samples.length) * 100 : 0)) }}</span>
+                    </div>
+                    <div class="mt-3 h-2 bg-white rounded-full overflow-hidden"><div class="h-full bg-orange-500 rounded-full" :style="{width: (samples.length ? (samplesNearExpiry.length / samples.length) * 100 : 0) + '%'}"></div></div>
+                    <div class="mt-2 text-xs text-gray-500">{{ formatNum(samplesNearExpiry.length) }} / {{ formatNum(samples.length) }}</div>
+                </div>
+                <div class="rounded-xl bg-gray-50 border border-gray-200 p-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-black text-gray-700">{{ lang === 'ar' ? 'منتهية / مؤرشفة' : 'Expired / Archived' }}</span>
+                        <span class="text-lg font-black text-gray-700">{{ formatPercent(archivedSamplesRate) }}</span>
+                    </div>
+                    <div class="mt-3 h-2 bg-white rounded-full overflow-hidden"><div class="h-full bg-gray-500 rounded-full" :style="{width: archivedSamplesRate + '%'}"></div></div>
+                    <div class="mt-2 text-xs text-gray-500">{{ formatNum(archivedSamplesCount) }} / {{ formatNum(samples.length) }}</div>
+                </div>
+            </div>
+        </section>
+
         <!-- Analytics & Charts Dashboard -->
         <section class="grid grid-cols-1 lg:grid-cols-3 gap-6" v-show="filteredSamples.length > 0">
             <!-- Results Distribution -->
@@ -2092,6 +2129,13 @@
                         (Array.isArray(s.inspections) ? s.inspections : []).forEach(i => {
                             if (['Accepted', 'Accepted with Notes', 'Rejected'].includes(i.result)) count++;
                         });
+                    });
+                    return count;
+                },
+                totalInspectionsCount() {
+                    let count = 0;
+                    this.samples.forEach(s => {
+                        count += Array.isArray(s.inspections) ? s.inspections.length : 0;
                     });
                     return count;
                 },

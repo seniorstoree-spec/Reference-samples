@@ -4145,7 +4145,8 @@
                     }
                 },
                 getInspectionStatus(insp) {
-                    if (insp.testedDate && insp.inspectorName && insp.result) return 'Completed';
+                    // A recorded inspection date and result mean the milestone is complete. Do not keep the reminder active just because an older record lacks inspectorName.
+                    if (insp.testedDate && insp.result) return 'Completed';
                     if (!insp.scheduledDate) return 'Scheduled';
                     const today = new Date(); today.setHours(0,0,0,0);
                     const schedDate = new Date(insp.scheduledDate); schedDate.setHours(0,0,0,0);                    const diff = schedDate.getTime() - today.getTime();

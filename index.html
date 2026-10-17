@@ -2601,7 +2601,14 @@
                         protectedFields.forEach(field => {
                             const serverHas = hasValue(serverItem?.[field]);
                             const localHas = hasValue(localItem?.[field]);
-                            if (serverHas && (!localHas || !preferLocalProtectedFields)) result[field] = preferLocalProtectedFields && localHas ? localItem[field] : serverItem[field];
+                            // Explicit edits may clear old unit values when switching units.
+                            if (preferLocalProtectedFields && Object.prototype.hasOwnProperty.call(localItem || {}, field)) {
+                                result[field] = localItem[field];
+                            } else if (serverHas && !preferLocalProtectedFields) {
+                                result[field] = serverItem[field];
+                            } else if (serverHas && !localHas) {
+                                result[field] = serverItem[field];
+                            }
                         });
 
                         // Preserve any server-side master-data fields that a stale local
@@ -3049,11 +3056,27 @@
                         ].filter(Boolean));
 
                         const serverSamples = (Array.isArray(current?.samples)?current.samples:[]).filter(x=>!ds.has(this.getSampleKey(x)));
-                        const serverCatalog = (Array.isArray(current?.catalog)?current.catalog:[]).filter(x=>!dc.has(this.getCatalogKey(x)));
+                        let serverCatalog = (Array.isArray(current?.catalog)?current.catalog:[]).filter(x=>!dc.has(this.getCatalogKey(x)));
                         const mergedSamples = reason === 'initial-seed' && !current
                             ? []
                             : this.mergeSamplesSafely(serverSamples, (this.samples||[]).filter(x=>!ds.has(this.getSampleKey(x))));
                         const preferLocalCatalogProtectedFields = options.preferLocalCatalogProtectedFields === true || reason === 'catalog-shelf-life-update' || reason === 'catalog-import' || reason === 'catalog-add';
+
+                        // Legacy rows without an id are keyed by name. Remove only the old
+                        // server row for an explicitly renamed product before merging its new name.
+                        const renamedCatalogOriginalName = String(options.renamedCatalogOriginalName || '').trim().toLowerCase();
+                        const renamedCatalogNewName = String(options.renamedCatalogNewName || '').trim().toLowerCase();
+                        if (renamedCatalogOriginalName && renamedCatalogNewName && renamedCatalogOriginalName !== renamedCatalogNewName) {
+                            const renamedLocalItem = (this.productCatalog || []).some(item =>
+                                !item?.id && String(item?.name || '').trim().toLowerCase() === renamedCatalogNewName
+                            );
+                            if (renamedLocalItem) {
+                                serverCatalog = serverCatalog.filter(item =>
+                                    item?.id || String(item?.name || '').trim().toLowerCase() !== renamedCatalogOriginalName
+                                );
+                            }
+                        }
+
                         const mergedCatalog = reason === 'initial-seed' && !current
                             ? (Array.isArray(window.MASTER_CATALOG_SEED) ? [...window.MASTER_CATALOG_SEED] : [])
                             : this.mergeCatalogSafely(serverCatalog, (this.productCatalog||[]).filter(x=>!dc.has(this.getCatalogKey(x))), {
@@ -3721,7 +3744,11 @@
                     const previous = this.productCatalog[actualIndex];
                     this.productCatalog[actualIndex] = updated;
 
-                    const saved = await this.persistAppState('catalog-shelf-life-update', { preferLocalCatalogProtectedFields: true });
+                    const saved = await this.persistAppState('catalog-shelf-life-update', {
+                        preferLocalCatalogProtectedFields: true,
+                        renamedCatalogOriginalName: newName.toLowerCase() !== originalName ? originalName : '',
+                        renamedCatalogNewName: newName.toLowerCase()
+                    });
                     if (!saved) {
                         this.productCatalog[actualIndex] = previous;
                         this.showToast(this.lang === 'ar' ? 'تعذر حفظ تعديل الصلاحية على الخادم، وتم إرجاع التعديل.' : 'Could not save the shelf-life change to the server; the edit was reverted.', 'error');

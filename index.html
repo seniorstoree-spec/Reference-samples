@@ -4230,12 +4230,31 @@
                     }
                 },
                 getInspectionStatus(insp) {
-                    // A recorded inspection date and result mean the milestone is complete. Do not keep the reminder active just because an older record lacks inspectorName.
+                    // A recorded inspection date and result mean the milestone is complete.
+                    // Do not keep the reminder active just because an older record lacks inspectorName.
                     if (insp.testedDate && insp.result) return 'Completed';
                     if (!insp.scheduledDate) return 'Scheduled';
-                    const today = new Date(); today.setHours(0,0,0,0);
-                    const schedDate = new Date(insp.scheduledDate); schedDate.setHours(0,0,0,0);                    const diff = schedDate.getTime() - today.getTime();
+
+                    // Parse YYYY-MM-DD as a local calendar date, not UTC. This prevents
+                    // timezone conversion from shifting the scheduled inspection day.
+                    const scheduledText = String(insp.scheduledDate).trim();
+                    const match = scheduledText.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                    let schedDate;
+                    if (match) {
+                        schedDate = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+                    } else {
+                        schedDate = new Date(scheduledText);
+                    }
+                    if (Number.isNaN(schedDate.getTime())) return 'Scheduled';
+
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    schedDate.setHours(0, 0, 0, 0);
+                    const diff = schedDate.getTime() - today.getTime();
+
                     if (diff === 0) return 'Due Today';
+                    // As soon as the scheduled date has passed, the inspection is overdue;
+                    // therefore it appears on the overdue KPI no later than the next calendar day.
                     if (diff < 0) return 'Overdue';
                     return 'Scheduled';
                 },

@@ -5211,7 +5211,8 @@
                         if (!(await this.ensureXlsxLibrary())) throw new Error('Excel library could not be loaded');
                         const allSamples = Array.isArray(this.samples) ? this.samples : [];
                         const matches = {
-                            dueToday: sample => Array.isArray(sample.inspections) && sample.inspections.some(insp => this.getInspectionStatus(insp) === 'Due Today'),
+                            dueToday: sample => ['Active', 'Near Expiry'].includes(this.getStatus(sample)) && Array.isArray(sample.inspections) && sample.inspections.some(insp => this.getInspectionStatus(insp) === 'Due Today'),
+                            overdue: sample => ['Active', 'Near Expiry'].includes(this.getStatus(sample)) && Array.isArray(sample.inspections) && sample.inspections.some(insp => this.getInspectionStatus(insp) === 'Overdue'),
                             nearExpiry: sample => this.getStatus(sample) === 'Near Expiry',
                             accepted: sample => Array.isArray(sample.inspections) && sample.inspections.some(insp => insp && insp.result === 'Accepted'),
                             acceptedNotes: sample => Array.isArray(sample.inspections) && sample.inspections.some(insp => insp && insp.result === 'Accepted with Notes'),
@@ -5229,6 +5230,7 @@
                             const relevant = inspections.filter(insp => {
                                 if (!insp) return false;
                                 if (type === 'dueToday') return this.getInspectionStatus(insp) === 'Due Today';
+                                if (type === 'overdue') return this.getInspectionStatus(insp) === 'Overdue';
                                 if (type === 'nearExpiry') return this.getStatus(sample) === 'Near Expiry';
                                 if (type === 'accepted') return insp.result === 'Accepted';
                                 if (type === 'acceptedNotes') return insp.result === 'Accepted with Notes';

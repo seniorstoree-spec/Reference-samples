@@ -2264,13 +2264,16 @@
                     return this.rejectedTree[year]?.[month]?.[product] || [];
                 },
                 filteredProductCatalog() {
-                    // Search and alphabetical sorting are UI-only; stored catalog data and shelf-life values stay unchanged.
+                    // Keep sorting presentation-only: never reorder or mutate the saved master catalog.
                     const normalize = (value) => String(value ?? '')
                         .normalize('NFKC')
-                        .replace(/[\u064B-\u065F\u0670]/g, '')
+                        .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '')
                         .replace(/[إأآٱ]/g, 'ا')
+                        .replace(/ؤ/g, 'و')
+                        .replace(/ئ/g, 'ي')
                         .replace(/ى/g, 'ي')
                         .replace(/ة/g, 'ه')
+                        .replace(/[ـ]/g, '')
                         .replace(/\s+/g, ' ')
                         .trim()
                         .toLowerCase();
@@ -2289,20 +2292,41 @@
                         return [nameRaw, nameTranslated, shelfLifeMonths, shelfLifeUnit, unitAr, expMonth, expDay, expYear]
                             .some(value => value.includes(query));
                     });
-                    // Sort by the currently displayed product name (Arabic or English), with a stable tie-breaker.
-                    return matchingItems.sort((a, b) => {
-                        const displayedA = String(this.t(a?.name) || a?.name || '').trim();
-                        const displayedB = String(this.t(b?.name) || b?.name || '').trim();
-                        const primary = displayedA.localeCompare(displayedB, this.lang === 'ar' ? 'ar' : 'en', {
-                            sensitivity: 'base',
-                            numeric: true,
-                            ignorePunctuation: true
-                        });
-                        return primary || String(a?.name || '').localeCompare(String(b?.name || ''), 'en', {
-                            sensitivity: 'base',
-                            numeric: true
-                        });
+
+                    if (this.lang === 'ar') {
+                        // Explicit Arabic alphabet weights avoid browser/locale-dependent ordering.
+                        // ا ب ت ث ج ح خ د ذ ر ز س ش ص ض ط ظ ع غ ف ق ك ل م ن ه و ي
+                        const arabicOrder = 'ابتثجحخدذرزسشصضطظعغفقكلمنهوي';
+                        const rank = new Map(Array.from(arabicOrder).map((letter, index) => [letter, index]));
+                        const compareArabic = (left, right) => {
+                            const a = normalize(left);
+                            const b = normalize(right);
+                            const length = Math.min(a.length, b.length);
+                            for (let i = 0; i < length; i++) {
+                                const ca = a[i];
+                                const cb = b[i];
+                                const ra = rank.has(ca) ? rank.get(ca) : (ca === ' ' ? -2 : 100 + ca.codePointAt(0));
+                                const rb = rank.has(cb) ? rank.get(cb) : (cb === ' ' ? -2 : 100 + cb.codePointAt(0));
+                                if (ra !== rb) return ra - rb;
+                            }
+                            return a.length - b.length;
+                        };
+                        return matchingItems.sort((a, b) =>
+                            compareArabic(a?.name, b?.name) ||
+                            String(a?.name || '').localeCompare(String(b?.name || ''), 'ar')
+                        );
+                    }
+
+                    const collator = new Intl.Collator('en', {
+                        usage: 'sort',
+                        sensitivity: 'base',
+                        numeric: true,
+                        ignorePunctuation: true
                     });
+                    return matchingItems.sort((a, b) =>
+                        collator.compare(String(this.t(a?.name) || a?.name || ''), String(this.t(b?.name) || b?.name || '')) ||
+                        String(a?.name || '').localeCompare(String(b?.name || ''))
+                    );
                 },
                 catalogAllSelected() {
                     return this.productCatalog.length > 0 && this.catalogSelectedItems.length === this.productCatalog.length;

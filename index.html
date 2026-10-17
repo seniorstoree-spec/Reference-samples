@@ -2264,7 +2264,7 @@
                     return this.rejectedTree[year]?.[month]?.[product] || [];
                 },
                 filteredProductCatalog() {
-                    // Search is UI-only: it never changes productCatalog or Supabase data.
+                    // Search and alphabetical sorting are UI-only; stored catalog data and shelf-life values stay unchanged.
                     const normalize = (value) => String(value ?? '')
                         .normalize('NFKC')
                         .replace(/[\u064B-\u065F\u0670]/g, '')
@@ -2275,8 +2275,8 @@
                         .trim()
                         .toLowerCase();
                     const query = normalize(this.catalogSearchQuery);
-                    if (!query) return this.productCatalog;
-                    return this.productCatalog.filter(item => {
+                    const matchingItems = this.productCatalog.filter(item => {
+                        if (!query) return true;
                         const nameRaw = normalize(item?.name);
                         const nameTranslated = normalize(this.t(item?.name));
                         const shelfLifeMonths = normalize(item?.shelfLifeMonths);
@@ -2288,6 +2288,20 @@
                         const expYear = normalize(item?.expYear);
                         return [nameRaw, nameTranslated, shelfLifeMonths, shelfLifeUnit, unitAr, expMonth, expDay, expYear]
                             .some(value => value.includes(query));
+                    });
+                    // Sort by the currently displayed product name (Arabic or English), with a stable tie-breaker.
+                    return matchingItems.sort((a, b) => {
+                        const displayedA = String(this.t(a?.name) || a?.name || '').trim();
+                        const displayedB = String(this.t(b?.name) || b?.name || '').trim();
+                        const primary = displayedA.localeCompare(displayedB, this.lang === 'ar' ? 'ar' : 'en', {
+                            sensitivity: 'base',
+                            numeric: true,
+                            ignorePunctuation: true
+                        });
+                        return primary || String(a?.name || '').localeCompare(String(b?.name || ''), 'en', {
+                            sensitivity: 'base',
+                            numeric: true
+                        });
                     });
                 },
                 catalogAllSelected() {

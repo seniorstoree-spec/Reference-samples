@@ -4416,6 +4416,10 @@
                     }
                 },
                 openModal(sample, insp) {
+                    // Close the overdue-inspections dialog before opening the inspection-entry dialog.
+                    if (this.kpiDrilldown && this.kpiDrilldown.open && this.kpiDrilldown.key === 'overdue') {
+                        this.closeKpiDrilldown();
+                    }
                     this.activeInspectionModal = { sample, inspection: insp };
                     this.modalForm = {
                         testedDate: insp.testedDate || new Date().toISOString().split('T')[0],

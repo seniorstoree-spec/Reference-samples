@@ -69,6 +69,9 @@
         .qc-sidebar-scroll {
             scrollbar-width: thin;
         }
+        .active-samples-top-scroll { scrollbar-width: thin; }
+        .active-samples-data-scroller { scrollbar-width: none; }
+        .active-samples-data-scroller::-webkit-scrollbar { display: none; }
         /* Keep the in-page sidebar visually isolated from the content column without changing its appearance. */
         .qc-sidebar-mobile { isolation: isolate; background-color: #fff; }
         @media (min-width: 1024px) {
@@ -738,9 +741,13 @@
                 </div>
             </div>
 
+            <!-- Persistent horizontal data scrollbar: kept above the sample list -->
+            <div v-if="currentSection === 'active'" ref="activeSamplesTopScroll" @scroll="syncActiveSamplesScroll('top')" class="active-samples-top-scroll overflow-x-auto overflow-y-hidden sticky top-0 z-20 h-5 border-b border-gray-200 bg-gray-50" role="region" :aria-label="lang === 'ar' ? 'تمرير جدول العينات أفقيًا' : 'Scroll sample table horizontally'">
+                <div :style="{ width: activeSamplesScrollWidth + 'px', height: '1px' }"></div>
+            </div>
             <!-- Table -->
-            <div class="overflow-x-auto">
-                <table class="w-full text-start border-collapse">
+            <div ref="activeSamplesTableScroll" @scroll="syncActiveSamplesScroll('table')" class="active-samples-data-scroller overflow-x-auto">
+                <table ref="activeSamplesDataTable" class="w-full text-start border-collapse">
                     <thead>
                         <tr class="bg-gray-100 text-gray-700 border-b border-gray-200">
                             <th class="p-3 w-10"></th>
@@ -1719,6 +1726,7 @@
                     })(),
                     
                     currentSection: 'dashboard',
+                    activeSamplesScrollWidth: 0,
                     currentTab: 'active', // active or archived
 
                     activeKpiFilter: null,
@@ -1775,6 +1783,8 @@
                 // Browser lifecycle recovery: keep the SPA visible and reactive when the
                 // user switches to another website/app and then returns to this tab.
                 this._pageReturnHandler = () => this.handlePageReturn();
+                this._activeSamplesResizeHandler = () => this.updateActiveSamplesScrollWidth();
+                window.addEventListener('resize', this._activeSamplesResizeHandler);
                 document.addEventListener('visibilitychange', this._pageReturnHandler);
                 window.addEventListener('pageshow', this._pageReturnHandler);
                 // Authentication is required before entering the application.
@@ -1930,6 +1940,10 @@
             beforeUnmount() {
                 clearTimeout(this._chartRetryTimer);
                 this._chartRetryTimer = null;
+                if (this._activeSamplesResizeHandler) {
+                    window.removeEventListener('resize', this._activeSamplesResizeHandler);
+                    this._activeSamplesResizeHandler = null;
+                }
                 if (this._pageReturnHandler) {
                     document.removeEventListener('visibilitychange', this._pageReturnHandler);
                     window.removeEventListener('pageshow', this._pageReturnHandler);
@@ -1941,12 +1955,16 @@
             },
             watch: {
                 currentSection(newSection) {
+                    this.$nextTick(() => this.updateActiveSamplesScrollWidth());
                     if (newSection === 'dashboard') {
                         this.$nextTick(() => {
                     this.dashboardAnalyticsFilteredCount = this.getDashboardAnalyticsRecords().length;
                     this.updateCharts();
                 });
                     }
+                },
+                filteredSamples() {
+                    this.$nextTick(() => this.updateActiveSamplesScrollWidth());
                 },
                 productCatalog: {
                     deep: true,
@@ -4547,6 +4565,28 @@
                         console.warn('[Page Return] UI recovery skipped:', e);
                         // A temporary browser lifecycle/render issue must never log the user
                         // out or replace the current data with an empty state.
+                    }
+                },
+                updateActiveSamplesScrollWidth() {
+                    this.$nextTick(() => {
+                        const table = this.$refs.activeSamplesDataTable;
+                        const tableScroller = this.$refs.activeSamplesTableScroll;
+                        if (!table || !tableScroller) return;
+                        this.activeSamplesScrollWidth = Math.max(table.scrollWidth, tableScroller.clientWidth);
+                        const topScroller = this.$refs.activeSamplesTopScroll;
+                        if (topScroller && topScroller.scrollLeft !== tableScroller.scrollLeft) {
+                            topScroller.scrollLeft = tableScroller.scrollLeft;
+                        }
+                    });
+                },
+                syncActiveSamplesScroll(source) {
+                    const topScroller = this.$refs.activeSamplesTopScroll;
+                    const tableScroller = this.$refs.activeSamplesTableScroll;
+                    if (!topScroller || !tableScroller) return;
+                    if (source === 'top' && tableScroller.scrollLeft !== topScroller.scrollLeft) {
+                        tableScroller.scrollLeft = topScroller.scrollLeft;
+                    } else if (source === 'table' && topScroller.scrollLeft !== tableScroller.scrollLeft) {
+                        topScroller.scrollLeft = tableScroller.scrollLeft;
                     }
                 },
                 async navigateSection(section) {

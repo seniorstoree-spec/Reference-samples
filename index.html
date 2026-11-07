@@ -69,9 +69,6 @@
         .qc-sidebar-scroll {
             scrollbar-width: thin;
         }
-        .active-samples-top-scroll { scrollbar-width: thin; }
-        .active-samples-data-scroller { scrollbar-width: none; }
-        .active-samples-data-scroller::-webkit-scrollbar { display: none; }
         /* Keep the in-page sidebar visually isolated from the content column without changing its appearance. */
         .qc-sidebar-mobile { isolation: isolate; background-color: #fff; }
         @media (min-width: 1024px) {
@@ -741,12 +738,8 @@
                 </div>
             </div>
 
-            <!-- Persistent horizontal data scrollbar: kept above the sample list -->
-            <div v-if="currentSection === 'active'" ref="activeSamplesTopScroll" @scroll="syncActiveSamplesScroll('top')" class="active-samples-top-scroll overflow-x-auto overflow-y-hidden sticky top-0 z-20 h-5 border-b border-gray-200 bg-gray-50" role="region" :aria-label="lang === 'ar' ? 'تمرير جدول العينات أفقيًا' : 'Scroll sample table horizontally'">
-                <div :style="{ width: activeSamplesScrollWidth + 'px', height: '1px' }"></div>
-            </div>
             <!-- Table -->
-            <div ref="activeSamplesTableScroll" @scroll="syncActiveSamplesScroll('table')" class="active-samples-data-scroller overflow-x-auto">
+            <div ref="activeSamplesTableScroll" @scroll="syncActiveSamplesScroll('table')" class="overflow-x-auto">
                 <table ref="activeSamplesDataTable" class="w-full text-start border-collapse">
                     <thead>
                         <tr class="bg-gray-100 text-gray-700 border-b border-gray-200">
@@ -936,6 +929,9 @@
         
             </div>
             </section>
+        <div v-if="currentSection === 'active' && activeSamplesScrollbarVisible" ref="activeSamplesFloatingScroll" @scroll="syncActiveSamplesScroll('floating')" class="fixed bottom-3 z-40 h-5 overflow-x-auto overflow-y-hidden rounded border border-gray-300 bg-white/95 shadow-lg" :style="activeSamplesFloatingStyle" role="region" :aria-label="lang === 'ar' ? 'شريط تمرير أفقي متحرك لجدول العينات' : 'Floating horizontal sample table scrollbar'">
+            <div :style="{ width: activeSamplesScrollWidth + 'px', height: '1px' }"></div>
+        </div>
         <!-- Product Master Catalog / Permissions Guide -->
         <section v-if="currentSection === 'catalog'" class="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden mb-8">
             <div class="p-6 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
@@ -1727,6 +1723,8 @@
                     
                     currentSection: 'dashboard',
                     activeSamplesScrollWidth: 0,
+                    activeSamplesScrollbarVisible: false,
+                    activeSamplesFloatingStyle: { left: '0px', width: '0px' },
                     currentTab: 'active', // active or archived
 
                     activeKpiFilter: null,
@@ -1783,8 +1781,16 @@
                 // Browser lifecycle recovery: keep the SPA visible and reactive when the
                 // user switches to another website/app and then returns to this tab.
                 this._pageReturnHandler = () => this.handlePageReturn();
-                this._activeSamplesResizeHandler = () => this.updateActiveSamplesScrollWidth();
-                window.addEventListener('resize', this._activeSamplesResizeHandler);
+                this._activeSamplesViewportHandler = () => {
+                    if (this._activeSamplesViewportFrame) return;
+                    this._activeSamplesViewportFrame = requestAnimationFrame(() => {
+                        this._activeSamplesViewportFrame = null;
+                        this.updateActiveSamplesScrollWidth();
+                        this.updateActiveSamplesScrollbarVisibility();
+                    });
+                };
+                window.addEventListener('resize', this._activeSamplesViewportHandler);
+                window.addEventListener('scroll', this._activeSamplesViewportHandler, { passive: true });
                 document.addEventListener('visibilitychange', this._pageReturnHandler);
                 window.addEventListener('pageshow', this._pageReturnHandler);
                 // Authentication is required before entering the application.
@@ -1940,9 +1946,14 @@
             beforeUnmount() {
                 clearTimeout(this._chartRetryTimer);
                 this._chartRetryTimer = null;
-                if (this._activeSamplesResizeHandler) {
-                    window.removeEventListener('resize', this._activeSamplesResizeHandler);
-                    this._activeSamplesResizeHandler = null;
+                if (this._activeSamplesViewportHandler) {
+                    window.removeEventListener('resize', this._activeSamplesViewportHandler);
+                    window.removeEventListener('scroll', this._activeSamplesViewportHandler);
+                    this._activeSamplesViewportHandler = null;
+                }
+                if (this._activeSamplesViewportFrame) {
+                    cancelAnimationFrame(this._activeSamplesViewportFrame);
+                    this._activeSamplesViewportFrame = null;
                 }
                 if (this._pageReturnHandler) {
                     document.removeEventListener('visibilitychange', this._pageReturnHandler);
@@ -1955,7 +1966,10 @@
             },
             watch: {
                 currentSection(newSection) {
-                    this.$nextTick(() => this.updateActiveSamplesScrollWidth());
+                    this.$nextTick(() => {
+                        this.updateActiveSamplesScrollWidth();
+                        this.updateActiveSamplesScrollbarVisibility();
+                    });
                     if (newSection === 'dashboard') {
                         this.$nextTick(() => {
                     this.dashboardAnalyticsFilteredCount = this.getDashboardAnalyticsRecords().length;
@@ -1964,7 +1978,10 @@
                     }
                 },
                 filteredSamples() {
-                    this.$nextTick(() => this.updateActiveSamplesScrollWidth());
+                    this.$nextTick(() => {
+                        this.updateActiveSamplesScrollWidth();
+                        this.updateActiveSamplesScrollbarVisibility();
+                    });
                 },
                 productCatalog: {
                     deep: true,
@@ -4571,22 +4588,51 @@
                     this.$nextTick(() => {
                         const table = this.$refs.activeSamplesDataTable;
                         const tableScroller = this.$refs.activeSamplesTableScroll;
-                        if (!table || !tableScroller) return;
+                        if (!table || !tableScroller) {
+                            this.activeSamplesScrollbarVisible = false;
+                            return;
+                        }
                         this.activeSamplesScrollWidth = Math.max(table.scrollWidth, tableScroller.clientWidth);
-                        const topScroller = this.$refs.activeSamplesTopScroll;
-                        if (topScroller && topScroller.scrollLeft !== tableScroller.scrollLeft) {
-                            topScroller.scrollLeft = tableScroller.scrollLeft;
+                        const floatingScroller = this.$refs.activeSamplesFloatingScroll;
+                        if (floatingScroller && floatingScroller.scrollLeft !== tableScroller.scrollLeft) {
+                            floatingScroller.scrollLeft = tableScroller.scrollLeft;
                         }
                     });
                 },
-                syncActiveSamplesScroll(source) {
-                    const topScroller = this.$refs.activeSamplesTopScroll;
+                updateActiveSamplesScrollbarVisibility() {
+                    if (this.currentSection !== 'active') {
+                        this.activeSamplesScrollbarVisible = false;
+                        return;
+                    }
                     const tableScroller = this.$refs.activeSamplesTableScroll;
-                    if (!topScroller || !tableScroller) return;
-                    if (source === 'top' && tableScroller.scrollLeft !== topScroller.scrollLeft) {
-                        tableScroller.scrollLeft = topScroller.scrollLeft;
-                    } else if (source === 'table' && topScroller.scrollLeft !== tableScroller.scrollLeft) {
-                        topScroller.scrollLeft = tableScroller.scrollLeft;
+                    const table = this.$refs.activeSamplesDataTable;
+                    if (!tableScroller || !table) {
+                        this.activeSamplesScrollbarVisible = false;
+                        return;
+                    }
+                    const bounds = tableScroller.getBoundingClientRect();
+                    const hasHorizontalOverflow = table.scrollWidth > tableScroller.clientWidth + 1;
+                    const isInViewport = bounds.bottom > 0 && bounds.top < window.innerHeight;
+                    this.activeSamplesScrollbarVisible = hasHorizontalOverflow && isInViewport;
+                    if (this.activeSamplesScrollbarVisible) {
+                        this.activeSamplesFloatingStyle = { left: `${bounds.left}px`, width: `${bounds.width}px` };
+                        this.activeSamplesScrollWidth = Math.max(table.scrollWidth, tableScroller.clientWidth);
+                        this.$nextTick(() => {
+                            const floatingScroller = this.$refs.activeSamplesFloatingScroll;
+                            if (floatingScroller && floatingScroller.scrollLeft !== tableScroller.scrollLeft) {
+                                floatingScroller.scrollLeft = tableScroller.scrollLeft;
+                            }
+                        });
+                    }
+                },
+                syncActiveSamplesScroll(source) {
+                    const floatingScroller = this.$refs.activeSamplesFloatingScroll;
+                    const tableScroller = this.$refs.activeSamplesTableScroll;
+                    if (!floatingScroller || !tableScroller) return;
+                    if (source === 'floating' && tableScroller.scrollLeft !== floatingScroller.scrollLeft) {
+                        tableScroller.scrollLeft = floatingScroller.scrollLeft;
+                    } else if (source === 'table' && floatingScroller.scrollLeft !== tableScroller.scrollLeft) {
+                        floatingScroller.scrollLeft = tableScroller.scrollLeft;
                     }
                 },
                 async navigateSection(section) {

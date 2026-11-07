@@ -512,7 +512,7 @@
                             <span class="text-gray-600 ms-1">({{ t(item.sample.productName) }})</span>
                         </div>
                         <div class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded text-xs font-bold shadow-sm hover:bg-yellow-200">
-                            {{ t(item.insp.stage) }} - {{ t('recordResult') }}
+                            {{ formatInspectionStage(item.insp.stage) }} - {{ t('recordResult') }}
                         </div>
                     </li>
                 </ul>
@@ -558,7 +558,12 @@
 
         <!-- Intake Form -->
         <section v-if="currentSection === 'intake'" class="bg-white p-6 rounded-lg shadow-md border-t-4 border-blue-600">
-            <h2 class="text-xl font-bold mb-6 text-gray-800">{{ t('newSampleIntake') }}</h2>
+            <div class="flex items-center justify-between gap-4 mb-6">
+                <h2 class="text-xl font-bold text-gray-800">{{ t('newSampleIntake') }}</h2>
+                <button type="button" @click="navigateSection('dashboard')" :title="t('closeIntake')" :aria-label="t('closeIntake')" class="shrink-0 rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
             <form @submit.prevent="addSample" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Product Name -->
                 <div>
@@ -640,7 +645,7 @@
                             <button type="button" @click="formInspections.splice(index, 1)" class="absolute top-2 rtl:left-2 ltr:right-2 text-red-400 hover:text-red-600 p-1" title="Remove">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                             </button>
-                            <div class="font-bold text-sm text-gray-700 pe-6">{{ t(insp.stage) }}</div>
+                            <div class="font-bold text-sm text-gray-700 pe-6">{{ formatInspectionStage(insp.stage) }}</div>
                             <div class="flex items-center gap-2"><input type="text" :value="formatDateInput(insp.scheduledDate)" @blur="updateDateInput(insp, 'scheduledDate', $event.target.value, 'save-schedule', sample)" placeholder="DD/MM/YY" inputmode="numeric" autocomplete="off" maxlength="8" pattern="\d{2}/\d{2}/\d{2}" required class="flex-1 min-w-0 w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:ring-blue-500 focus:border-blue-500 text-gray-800 font-mono" dir="ltr"><div class="relative shrink-0 w-9 h-9"><span class="absolute inset-0 inline-flex items-center justify-center rounded border border-gray-300 bg-white text-gray-500 pointer-events-none"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M7 3v3m10-3v3M4 9h16M6 5h12a2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2Z"></path></svg></span><input type="date" :value="insp.scheduledDate || ''" @change="selectDateFromPicker(insp, 'scheduledDate', $event.target.value, 'save-schedule', sample)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" title="اختيار التاريخ من التقويم" aria-label="اختيار التاريخ من التقويم"></div></div>
                             <div v-if="insp.scheduledDate" class="text-[11px] text-blue-600 font-mono font-bold" dir="ltr">📅 {{ formatDate(insp.scheduledDate) }}</div>
                         </div>
@@ -863,7 +868,7 @@
                                                     </tr>
                                                     <tr v-for="(insp, index) in sample.inspections" :key="insp.id" class="bg-white hover:bg-blue-50/50 transition-colors align-middle">
                                                         <td class="p-3 align-middle">
-                                                            <div class="font-bold text-gray-800 px-2 leading-6 break-words">{{ t(insp.stage) }}</div>
+                                                            <div class="font-bold text-gray-800 px-2 leading-6 break-words">{{ formatInspectionStage(insp.stage) }}</div>
                                                         </td>
                                                         <td class="p-3 align-middle">
                                                             <div class="flex items-center gap-2 w-full"><input type="text" :value="formatDateInput(insp.scheduledDate)" @blur="updateDateInput(insp, 'scheduledDate', $event.target.value, 'save-schedule', sample)" placeholder="DD/MM/YY" inputmode="numeric" autocomplete="off" maxlength="8" pattern="\d{2}/\d{2}/\d{2}" class="flex-1 min-w-0 w-full max-w-full bg-gray-50 border border-gray-200 hover:border-blue-300 focus:border-blue-500 rounded-lg px-2 py-2 transition-colors text-gray-700 font-mono text-sm shadow-sm" dir="ltr"><div class="relative shrink-0 w-9 h-9"><span class="absolute inset-0 inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 pointer-events-none"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M7 3v3m10-3v3M4 9h16M6 5h12a2 2 0 012 2v11a2 2 0 01-2-2V7a2 2 0 012-2Z"></path></svg></span><input type="date" :value="insp.scheduledDate || ''" @change="selectDateFromPicker(insp, 'scheduledDate', $event.target.value, 'save-schedule', sample)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" title="اختيار التاريخ من التقويم" aria-label="اختيار التاريخ من التقويم"></div></div>
@@ -1165,7 +1170,7 @@
                                     <td class="p-3 font-bold text-gray-500">{{ index + 1 }}</td>
                                     <td class="p-3 font-bold text-gray-900"><span class="sample-name-one-line block max-w-[260px] truncate" :title="t(row.productName)">{{ t(row.productName) }}</span></td>
                                     <td class="p-3 text-center font-mono" dir="ltr">{{ row.batchNumber || '-' }}</td>
-                                    <td class="p-3 text-center">{{ row.stage !== '-' ? t(row.stage) : '-' }}</td>
+                                    <td class="p-3 text-center">{{ row.stage !== '-' ? formatInspectionStage(row.stage) : '-' }}</td>
                                     <td class="p-3 text-center font-mono" dir="ltr">{{ row.testedDate ? formatDate(row.testedDate) : '-' }}</td>
                                     <td class="p-3 text-center">
                                         <span class="inline-flex px-2.5 py-1 rounded-full text-xs font-black" :class="row.result === 'Rejected' ? 'bg-red-100 text-red-700' : row.result === 'Accepted with Notes' ? 'bg-blue-100 text-blue-700' : row.result === 'Accepted' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'">
@@ -1220,7 +1225,7 @@
                         </div>
                         <div class="pt-3 border-t border-blue-200">
                             <span class="font-bold text-blue-900">{{ t('stageLabel') }}</span> 
-                            <span class="text-blue-800 font-black ms-2 text-lg">{{ t(activeInspectionModal.inspection.stage) }}</span>
+                            <span class="text-blue-800 font-black ms-2 text-lg">{{ formatInspectionStage(activeInspectionModal.inspection.stage) }}</span>
                         </div>
                     </div>
 
@@ -1422,7 +1427,8 @@
             "expirationDate": { en: "Expiration Date *", ar: "تاريخ الانتهاء *" },
             "computedTotalLife": { en: "Computed Total Shelf Life:", ar: "مدة الصلاحية الكلية المحسوبة:" },
             "days": { en: "days", ar: "يوم" },
-            "smartScheduleGenInfo": { en: "5 Smart Schedule milestones will be automatically generated upon submission.", ar: "سيتم إنشاء 5 مراحل فحص مجدولة تلقائياً." },
+            "smartScheduleGenInfo": { en: "Monthly inspections are scheduled from production through the end of shelf life.", ar: "تُجدول الفحوصات شهريًا من تاريخ الإنتاج حتى نهاية الصلاحية." },
+            "closeIntake": { en: "Close sample intake", ar: "إغلاق تسجيل العينة" },
             "addSampleBtn": { en: "Add Retention Sample", ar: "إضافة العينة المرجعية" },
             "filterByProduct": { en: "Filter by Product", ar: "تصفية حسب الصنف" },
             "allProducts": { en: "All Products", ar: "كل الأصناف" },
@@ -3964,27 +3970,36 @@
                     }
                     return Math.max(0, diffDays);
                 },
+                generateMonthlyInspectionSchedule(productionDate, expirationDate) {
+                    if (!productionDate || !expirationDate) return [];
+                    const production = new Date(`${productionDate}T00:00:00`);
+                    const expiration = new Date(`${expirationDate}T00:00:00`);
+                    if (isNaN(production.getTime()) || isNaN(expiration.getTime()) || expiration <= production) return [];
+                    const schedule = [];
+                    const originalDay = production.getDate();
+                    for (let month = 1; month <= 1200; month++) {
+                        const monthDate = new Date(production.getFullYear(), production.getMonth() + month, 1);
+                        const lastDayOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
+                        monthDate.setDate(Math.min(originalDay, lastDayOfMonth));
+                        if (monthDate > expiration) break;
+                        schedule.push({
+                            id: Date.now() + month,
+                            stage: `Monthly Inspection ${month}`,
+                            scheduledDate: `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}-${String(monthDate.getDate()).padStart(2, '0')}`
+                        });
+                    }
+                    return schedule;
+                },
+                formatInspectionStage(stage) {
+                    const monthly = String(stage || '').match(/^Monthly Inspection (\d+)$/);
+                    if (monthly) return this.lang === 'ar' ? `فحص الشهر ${monthly[1]}` : `Month ${monthly[1]} Inspection`;
+                    return this.t(stage);
+                },
                 regenerateFormSchedule() {
                     const expStr = this.computedExpirationDate || this.form.expirationDate;
                     console.log('[QC Dynamic Trigger] regenerateFormSchedule executed. Production Date:', this.form.productionDate, 'Computed Expiration Date:', expStr);
-                    if (this.form.productionDate && expStr) {
-                        const prodDate = new Date(this.form.productionDate);
-                        const expDate = new Date(expStr);
-                        if (!isNaN(prodDate.getTime()) && !isNaN(expDate.getTime()) && expDate >= prodDate) {
-                            const totalDays = this.calculateTotalShelfLife(this.form.productionDate, expStr);
-                            this.formInspections = [
-                                { id: Date.now() + 1, stage: 'Baseline (0%)', scheduledDate: this.calculateMilestoneDate(this.form.productionDate, totalDays, 0) },
-                                { id: Date.now() + 2, stage: 'Quarter-Life (25%)', scheduledDate: this.calculateMilestoneDate(this.form.productionDate, totalDays, 0.25) },
-                                { id: Date.now() + 3, stage: 'Mid-Life (50%)', scheduledDate: this.calculateMilestoneDate(this.form.productionDate, totalDays, 0.50) },
-                                { id: Date.now() + 4, stage: 'Three-Quarter-Life (75%)', scheduledDate: this.calculateMilestoneDate(this.form.productionDate, totalDays, 0.75) },
-                                { id: Date.now() + 5, stage: 'End-of-Life (100%)', scheduledDate: this.calculateMilestoneDate(this.form.productionDate, totalDays, 1) }
-                            ];
-                            console.log('[QC Dynamic Trigger] Successfully generated 5 inspection intervals:', this.formInspections);
-                            return;
-                        }
-                    }
-                    this.formInspections = [];
-                    console.log('[QC Dynamic Trigger] Inspection intervals reset (missing or invalid dates).');
+                    this.formInspections = this.generateMonthlyInspectionSchedule(this.form.productionDate, expStr);
+                    console.log('[QC Dynamic Trigger] Generated monthly inspection schedule:', this.formInspections);
                 },
                 recalculateSampleSchedule(sample) {
                     if (!sample || !sample.productionDate || !sample.productName) return;
@@ -4023,13 +4038,9 @@
                     const totalDays = this.calculateTotalShelfLife(sample.productionDate, sample.expirationDate);
 
                     if (!sample.inspections || sample.inspections.length === 0) {
-                        sample.inspections = [
-                            { id: Date.now() + 1, stage: 'Baseline (0%)', scheduledDate: this.calculateMilestoneDate(sample.productionDate, totalDays, 0), testedDate: '', inspectorName: '', result: '', issueCategory: '', defectTags: [], notes: '', rejectionReason: '', photoDataUrl: null },
-                            { id: Date.now() + 2, stage: 'Quarter-Life (25%)', scheduledDate: this.calculateMilestoneDate(sample.productionDate, totalDays, 0.25), testedDate: '', inspectorName: '', result: '', issueCategory: '', defectTags: [], notes: '', rejectionReason: '', photoDataUrl: null },
-                            { id: Date.now() + 3, stage: 'Mid-Life (50%)', scheduledDate: this.calculateMilestoneDate(sample.productionDate, totalDays, 0.50), testedDate: '', inspectorName: '', result: '', issueCategory: '', defectTags: [], notes: '', rejectionReason: '', photoDataUrl: null },
-                            { id: Date.now() + 4, stage: 'Three-Quarter-Life (75%)', scheduledDate: this.calculateMilestoneDate(sample.productionDate, totalDays, 0.75), testedDate: '', inspectorName: '', result: '', issueCategory: '', defectTags: [], notes: '', rejectionReason: '', photoDataUrl: null },
-                            { id: Date.now() + 5, stage: 'End-of-Life (100%)', scheduledDate: this.calculateMilestoneDate(sample.productionDate, totalDays, 1), testedDate: '', inspectorName: '', result: '', issueCategory: '', defectTags: [], notes: '', rejectionReason: '', photoDataUrl: null }
-                        ];
+                        sample.inspections = this.generateMonthlyInspectionSchedule(sample.productionDate, sample.expirationDate).map(insp => ({
+                            ...insp, testedDate: '', inspectorName: '', result: '', issueCategory: '', defectTags: [], notes: '', rejectionReason: '', photoDataUrl: null
+                        }));
                     } else {
                         sample.inspections.forEach(insp => {
                             if (!insp.testedDate && !insp.result) {

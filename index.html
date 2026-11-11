@@ -1430,7 +1430,7 @@
             "expirationDate": { en: "Expiration Date *", ar: "تاريخ الانتهاء *" },
             "computedTotalLife": { en: "Computed Total Shelf Life:", ar: "مدة الصلاحية الكلية المحسوبة:" },
             "days": { en: "days", ar: "يوم" },
-            "smartScheduleGenInfo": { en: "Monthly inspections are scheduled from production through the end of shelf life.", ar: "تُجدول الفحوصات شهريًا من تاريخ الإنتاج حتى نهاية الصلاحية." },
+            "smartScheduleGenInfo": { en: "Monthly inspections are scheduled through shelf life, ending at the next monthly checkpoint.", ar: "تُجدول الفحوصات شهريًا، ويكون آخر فحص في الموعد الشهري التالي لتاريخ الانتهاء." },
             "closeIntake": { en: "Close sample intake", ar: "إغلاق تسجيل العينة" },
             "addSampleBtn": { en: "Add Retention Sample", ar: "إضافة العينة المرجعية" },
             "filterByProduct": { en: "Filter by Product", ar: "تصفية حسب الصنف" },
@@ -4016,12 +4016,14 @@
                         const monthDate = new Date(production.getFullYear(), production.getMonth() + month, 1);
                         const lastDayOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
                         monthDate.setDate(Math.min(originalDay, lastDayOfMonth));
-                        if (monthDate > expiration) break;
                         schedule.push({
                             id: Date.now() + month,
                             stage: `Monthly Inspection ${month}`,
                             scheduledDate: `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}-${String(monthDate.getDate()).padStart(2, '0')}`
                         });
+                        // Keep the final monthly checkpoint even when its anniversary falls
+                        // just after expiry (e.g. Nov 1 -> Dec 1 for a Nov 30 expiry).
+                        if (monthDate >= expiration) break;
                     }
                     return schedule;
                 },

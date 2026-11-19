@@ -1133,6 +1133,51 @@
             </div>
         </section>
 
+        <section v-if="currentSection === 'deleted'" class="bg-white rounded-lg shadow-md overflow-hidden mt-6">
+            <div class="p-6 border-b bg-purple-50 flex justify-between items-center gap-4">
+                <div>
+                    <h3 class="text-xl font-black text-purple-900">{{ lang === 'ar' ? 'أصناف الدليل المحذوفة' : 'Deleted Catalog Products' }}</h3>
+                    <p class="text-sm text-purple-700 mt-1">{{ lang === 'ar' ? 'يمكنك استعادة الصنف إلى دليل الأصناف أو حذفه نهائيًا.' : 'Restore a product to the catalog or permanently delete it.' }}</p>
+                </div>
+                <span class="bg-white border border-purple-200 rounded-lg px-3 py-2 font-bold">{{ formatNum(deletedCatalog.length) }}</span>
+            </div>
+            <div class="p-6">
+                <div v-if="deletedCatalog.length === 0" class="p-6 text-center text-gray-400 border rounded-lg">
+                    {{ lang === 'ar' ? 'لا توجد أصناف دليل محذوفة.' : 'No deleted catalog products.' }}
+                </div>
+                <div v-else class="w-full border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-white">
+                    <div class="overflow-x-auto">
+                        <table class="w-full min-w-[700px] text-sm text-gray-600">
+                            <thead class="bg-gray-50 text-gray-700 border-b border-gray-200">
+                                <tr>
+                                    <th class="p-4 text-start font-bold">{{ lang === 'ar' ? 'الصنف' : 'Product' }}</th>
+                                    <th class="p-4 text-center font-bold">{{ lang === 'ar' ? 'مدة الصلاحية' : 'Shelf Life' }}</th>
+                                    <th class="p-4 text-center font-bold">{{ lang === 'ar' ? 'تاريخ الحذف' : 'Deleted On' }}</th>
+                                    <th class="p-4 text-center font-bold">{{ lang === 'ar' ? 'الإجراءات' : 'Actions' }}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr v-for="item in deletedCatalog" :key="'dc-' + getCatalogKey(item)" class="hover:bg-gray-50 transition-colors">
+                                    <td class="p-4 font-bold text-gray-800">{{ t(item.name) }}</td>
+                                    <td class="p-4 text-center" dir="auto">
+                                        <span v-if="item.expDay">{{ item.expDay }} {{ lang === 'ar' ? 'يوم' : 'days' }}</span>
+                                        <span v-else-if="item.expYear">{{ item.expYear }} {{ lang === 'ar' ? 'سنة' : 'years' }}</span>
+                                        <span v-else>{{ item.expMonth || item.shelfLifeMonths || '-' }} {{ lang === 'ar' ? 'شهر' : 'months' }}</span>
+                                    </td>
+                                    <td class="p-4 text-center text-gray-700" dir="ltr">{{ item.deletedAt ? formatDate(item.deletedAt) : '-' }}</td>
+                                    <td class="p-4 text-center">
+                                        <div class="flex flex-wrap items-center justify-center gap-2">
+                                            <button @click="restoreDeletedCatalog(item)" class="bg-green-50 text-green-700 border border-green-200 px-4 py-2 rounded-lg font-bold text-xs hover:bg-green-100 transition-colors whitespace-nowrap">{{ lang === 'ar' ? 'استعادة' : 'Restore' }}</button>
+                                            <button @click="permanentlyDeleteCatalog(item)" class="bg-red-50 text-red-700 border border-red-200 px-4 py-2 rounded-lg font-bold text-xs hover:bg-red-100 transition-colors whitespace-nowrap">{{ lang === 'ar' ? 'حذف نهائي' : 'Delete Permanently' }}</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
 
         
         </div>
@@ -2238,7 +2283,7 @@
                 activeSamplesCount() {
                     return this.samples.filter(s => ['Active', 'Near Expiry'].includes(this.getStatus(s))).length;
                 },
-                deletedTotalCount() { return this.deletedSamples.length; },
+                deletedTotalCount() { return this.deletedSamples.length + this.deletedCatalog.length; },
                 archivedSamplesCount() {
                     return this.samples.filter(s => ['Expired', 'Archived / Expired'].includes(this.getStatus(s))).length;
                 },
@@ -2865,6 +2910,12 @@
                         // Permanent catalog deletions remain as tombstones only so the
                         // product can never return to the active catalog, but they must NOT
                         // appear in the Deleted Items list.
+                        const registryPermanentCatalogKeys = new Set(
+                            deletionRegistry
+                                .filter(x => x.entity_type === 'catalog' && x.is_permanent)
+                                .map(x => String(x.entity_key || '').trim().toLowerCase())
+                                .filter(Boolean)
+                        );
                         const registryCatalog = deletionRegistry
                             .filter(x => x.entity_type === 'catalog' && !x.is_permanent)
                             .map(x => x.payload)
@@ -2877,7 +2928,7 @@
                         this.deletedCatalog = this.mergeDeletedItems(
                             Array.isArray(data?.deleted_catalog) ? data.deleted_catalog : [],
                             this.mergeDeletedItems(this.deletedCatalog, registryCatalog)
-                        );
+                        ).filter(item => !registryPermanentCatalogKeys.has(this.getCatalogKey(item)));
                         const registrySampleKeys = new Set(
                             deletionRegistry.filter(x => x.entity_type === 'sample').map(x => String(x.entity_key || '')).filter(Boolean)
                         );
@@ -2921,7 +2972,7 @@
                             this.deletedCatalog = this.mergeDeletedItems(
                                 Array.isArray(data.deleted_catalog) ? data.deleted_catalog : [],
                                 this.deletedCatalog
-                            );
+                            ).filter(item => !registryPermanentCatalogKeys.has(this.getCatalogKey(item)));
 
                             localStorage.setItem('QC_PERMANENTLY_DELETED_SAMPLES', JSON.stringify(this.permanentlyDeletedSamples));
                             localStorage.setItem('QC_DELETED_SAMPLES', JSON.stringify(this.deletedSamples));
@@ -3059,6 +3110,9 @@
                         const restoredSampleKey = reason === 'restore-sample'
                             ? String(options.restoredSampleKey || '')
                             : '';
+                        const restoredCatalogKey = reason === 'restore-catalog'
+                            ? String(options.restoredCatalogKey || '').trim().toLowerCase()
+                            : '';
 
                         if (restoredSampleKey) {
                             // Restoration is an intentional removal from Deleted Items.
@@ -3071,6 +3125,13 @@
                             this.deletedSamples = this.mergeDeletedItems(current?.deleted_samples, this.deletedSamples);
                         }
                         this.deletedCatalog = this.mergeDeletedItems(current?.deleted_catalog, this.deletedCatalog);
+                        if (restoredCatalogKey) {
+                            // A catalog restore is an intentional removal from Deleted Items.
+                            // Do not merge the stale server copy back into the deletion list.
+                            this.deletedCatalog = this.deletedCatalog.filter(
+                                item => this.getCatalogKey(item) !== restoredCatalogKey
+                            );
+                        }
                         const permanentCatalogKeys = new Set(
                             deletionRegistry
                                 .filter(x => x.entity_type === 'catalog' && x.is_permanent)
@@ -3867,20 +3928,39 @@
                     this.showToast(this.lang === 'ar' ? 'تم نقل الصنف إلى المحذوفات' : 'Product moved to Deleted Items');
                 },
                 async restoreDeletedCatalog(item) {
-                    const key=this.getCatalogKey(item);
-                    if(this.productCatalog.some(x=>this.getCatalogKey(x)===key)){this.showToast(this.lang==='ar'?'الصنف موجود بالفعل':'Product already exists','error');return;}
-                    this.deletedCatalog=this.deletedCatalog.filter(x=>this.getCatalogKey(x)!==key);
-                    const {deletedAt,deletedBy,...product}=item;
+                    const key = this.getCatalogKey(item);
+                    if (!key) {
+                        this.showToast(this.lang === 'ar' ? 'تعذر تحديد الصنف للاستعادة.' : 'Could not identify the product to restore.', 'error');
+                        return;
+                    }
+                    if (this.productCatalog.some(product => this.getCatalogKey(product) === key)) {
+                        this.showToast(this.lang === 'ar' ? 'الصنف موجود بالفعل' : 'Product already exists', 'error');
+                        return;
+                    }
+                    const { deletedAt, deletedBy, ...product } = item;
                     try {
                         await this.removeDeletedRegistry('catalog', key);
                     } catch (registryError) {
                         console.error('[Deleted Registry] Catalog restore failed:', registryError);
-                        this.showToast(this.lang==='ar'?'تعذر استعادة الصنف على الخادم.':'Could not restore the product on the server.','error');
+                        this.showToast(this.lang === 'ar' ? 'تعذر استعادة الصنف على الخادم.' : 'Could not restore the product on the server.', 'error');
                         return;
                     }
+
+                    this.deletedCatalog = this.deletedCatalog.filter(deletedItem => this.getCatalogKey(deletedItem) !== key);
                     this.productCatalog.push(product);
-                    await this.persistAppState('restore-catalog');
-                    this.showToast(this.lang==='ar'?'تمت استعادة الصنف':'Product restored');
+                    const saved = await this.persistAppState('restore-catalog', { restoredCatalogKey: key });
+                    if (!saved) {
+                        this.productCatalog = this.productCatalog.filter(activeItem => this.getCatalogKey(activeItem) !== key);
+                        this.deletedCatalog = this.mergeDeletedItems(this.deletedCatalog, [item], 'catalog');
+                        try {
+                            await this.upsertDeletedRegistry('catalog', item, false);
+                        } catch (rollbackError) {
+                            console.error('[Deleted Registry] Catalog restore rollback failed:', rollbackError);
+                        }
+                        this.showToast(this.lang === 'ar' ? 'تعذر حفظ الاستعادة؛ أُعيد الصنف إلى قائمة المحذوفات.' : 'Could not save the restore; the product was returned to Deleted Items.', 'error');
+                        return;
+                    }
+                    this.showToast(this.lang === 'ar' ? 'تمت استعادة الصنف إلى دليل الأصناف' : 'Product restored to the catalog');
                 },
                 async permanentlyDeleteCatalog(item) {
                     if(!window.confirm(this.lang==='ar'?'سيتم حذف الصنف نهائياً ولا يمكن استعادته. هل تريد المتابعة؟':'Permanently delete this product?'))return;

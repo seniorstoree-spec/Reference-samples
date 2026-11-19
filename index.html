@@ -1082,7 +1082,7 @@
                                     </template>
                                     <template v-else>
                                         <button @click="startCatalogEdit(index, item)" class="text-blue-600 hover:text-blue-800 font-bold bg-blue-50 px-3 py-1.5 rounded transition-colors text-xs">تعديل</button>
-                                        <button @click="deleteCatalogProduct(index)" class="text-red-600 hover:text-red-800 font-bold bg-red-50 px-3 py-1.5 rounded transition-colors text-xs">حذف</button>
+                                        <button @click="deleteCatalogProduct(item)" class="text-red-600 hover:text-red-800 font-bold bg-red-50 px-3 py-1.5 rounded transition-colors text-xs">حذف</button>
                                     </template>
                                     </div>
                                 </td>
@@ -2528,22 +2528,29 @@
                     if (error) throw error;
                     return Array.isArray(data) ? data : [];
                 },
-                async upsertDeletedRegistry(entityType, item, isPermanent = false) {
-                    const entityKey = entityType === 'sample' ? this.getSampleKey(item) : this.getCatalogKey(item);
-                    if (!entityKey) throw new Error('Cannot create deletion key');
-                    const { error } = await supabaseClient
-                        .from('reference_user_deleted_registry')
-                        .upsert({
+                async upsertDeletedRegistry(entityType, itemOrItems, isPermanent = false) {
+                    const multiple = Array.isArray(itemOrItems);
+                    const items = multiple ? itemOrItems : [itemOrItems];
+                    const deletedAt = new Date().toISOString();
+                    const rows = items.map(item => {
+                        const entityKey = entityType === 'sample' ? this.getSampleKey(item) : this.getCatalogKey(item);
+                        if (!entityKey) return null;
+                        return {
                             owner_user_id: this.getCurrentUserId(),
                             entity_type: entityType,
                             entity_key: entityKey,
                             payload: item,
-                            deleted_at: item.deletedAt || new Date().toISOString(),
+                            deleted_at: item.deletedAt || deletedAt,
                             deleted_by: item.deletedBy || this.auth.username || this.auth.email || 'user',
                             is_permanent: !!isPermanent
-                        }, { onConflict: 'owner_user_id,entity_type,entity_key' });
+                        };
+                    });
+                    if (!rows.length || rows.some(row => !row)) throw new Error('Cannot create deletion key');
+                    const { error } = await supabaseClient
+                        .from('reference_user_deleted_registry')
+                        .upsert(rows, { onConflict: 'owner_user_id,entity_type,entity_key' });
                     if (error) throw error;
-                    return entityKey;
+                    return multiple ? rows.map(row => row.entity_key) : rows[0].entity_key;
                 },
                 async removeDeletedRegistry(entityType, itemOrKey) {
                     const entityKey = typeof itemOrKey === 'string'
@@ -3656,18 +3663,44 @@
                         this.catalogSelectedItems = this.productCatalog.map(p => p.name);
                     }
                 },
-                deleteSelectedCatalogItems() {
-                    if (this.catalogSelectedItems.length === 0) return;
-                    const confirmMessage = this.lang === 'ar' 
-                        ? `هل أنت متأكد من حذف ${this.catalogSelectedItems.length} من المنتجات؟` 
-                        : `Are you sure you want to delete ${this.catalogSelectedItems.length} products?`;
-                    
-                    if (window.confirm(confirmMessage)) {
-                        this.productCatalog = this.productCatalog.filter(p => !this.catalogSelectedItems.includes(p.name));
-                        this.persistAppState();
+                async deleteSelectedCatalogItems() {
+                    const selectedNames = new Set((this.catalogSelectedItems || []).map(name => String(name)));
+                    const selectedItems = this.productCatalog.filter(item => selectedNames.has(String(item.name)));
+                    if (selectedItems.length === 0) {
                         this.catalogSelectedItems = [];
-                        this.showToast(this.lang === 'ar' ? 'تم حذف المنتجات بنجاح' : 'Products deleted successfully');
+                        return;
                     }
+                    const confirmMessage = this.lang === 'ar'
+                        ? `هل أنت متأكد من نقل ${selectedItems.length} من الأصناف إلى المحذوفات؟`
+                        : `Are you sure you want to move ${selectedItems.length} products to Deleted Items?`;
+                    if (!window.confirm(confirmMessage)) return;
+
+                    const deletedAt = new Date().toISOString();
+                    const deletedBy = this.auth.username || this.auth.email || 'user';
+                    const deletedItems = selectedItems.map(item => ({ ...item, deletedAt, deletedBy }));
+                    try {
+                        // Save all tombstones in one upsert before mutating the active catalog.
+                        await this.upsertDeletedRegistry('catalog', deletedItems, false);
+                    } catch (registryError) {
+                        console.error('[Deleted Registry] Bulk catalog tombstones failed:', registryError);
+                        this.showToast(this.lang === 'ar'
+                            ? 'تعذر تثبيت حذف الأصناف على الخادم؛ لم يتم حذفها.'
+                            : 'Could not persist the product deletions; nothing was deleted.', 'error');
+                        return;
+                    }
+
+                    const deletedKeys = new Set(deletedItems.map(item => this.getCatalogKey(item)));
+                    this.productCatalog = this.productCatalog.filter(item => !deletedKeys.has(this.getCatalogKey(item)));
+                    this.deletedCatalog = this.mergeDeletedItems(this.deletedCatalog, deletedItems, 'catalog');
+                    this.catalogSelectedItems = [];
+                    const saved = await this.persistAppState('delete-catalog');
+                    if (!saved) {
+                        this.showToast(this.lang === 'ar'
+                            ? 'تم تثبيت الحذف، لكن تعذرت مزامنة الدليل بالكامل. أعد تحميل الصفحة للتحقق.'
+                            : 'Deletion tombstones were saved, but the catalog sync did not finish. Reload to verify.', 'error');
+                        return;
+                    }
+                    this.showToast(this.lang === 'ar' ? 'تم حذف الأصناف ونقلها إلى المحذوفات' : 'Products moved to Deleted Items');
                 },
                 resetToDefaultData() {
                     const confirmMessage = this.lang === 'ar' 
@@ -3801,21 +3834,37 @@
                     this.cancelCatalogEdit();
                     this.showToast(this.lang === 'ar' ? 'تم تحديث فترة الصلاحية وحفظها بنجاح' : 'Shelf life updated and saved successfully');
                 },
-                async deleteCatalogProduct(index) {
-                    if(!confirm(this.lang==='ar'?'هل تريد نقل هذا الصنف إلى المحذوفات؟':'Move this product to Deleted Items?'))return;
-                    const item=this.productCatalog[index]; if(!item)return;
-                    const deletedItem = {...item,deletedAt:new Date().toISOString(),deletedBy:this.auth.username||this.auth.email||'user'};
+                async deleteCatalogProduct(item) {
+                    if (!item) return;
+                    if (!window.confirm(this.lang === 'ar' ? 'هل تريد نقل هذا الصنف إلى المحذوفات؟' : 'Move this product to Deleted Items?')) return;
+                    const key = this.getCatalogKey(item);
+                    const actualIndex = this.productCatalog.findIndex(product => this.getCatalogKey(product) === key);
+                    if (!key || actualIndex < 0) {
+                        this.showToast(this.lang === 'ar' ? 'تعذر تحديد الصنف للحذف.' : 'Could not locate the product to delete.', 'error');
+                        return;
+                    }
+                    const deletedItem = {
+                        ...this.productCatalog[actualIndex],
+                        deletedAt: new Date().toISOString(),
+                        deletedBy: this.auth.username || this.auth.email || 'user'
+                    };
                     try {
                         await this.upsertDeletedRegistry('catalog', deletedItem, false);
                     } catch (registryError) {
                         console.error('[Deleted Registry] Catalog tombstone failed:', registryError);
-                        this.showToast(this.lang==='ar'?'تعذر تثبيت حذف الصنف على الخادم.':'Could not persist the product deletion.','error');
+                        this.showToast(this.lang === 'ar' ? 'تعذر تثبيت حذف الصنف على الخادم؛ لم يتم حذفه.' : 'Could not persist the product deletion; it was not deleted.', 'error');
                         return;
                     }
-                    this.productCatalog.splice(index,1);
-                    this.deletedCatalog = this.mergeDeletedItems(this.deletedCatalog, [deletedItem]);
-                    await this.persistAppState('delete-catalog');
-                    this.showToast(this.lang==='ar'?'تم نقل الصنف إلى المحذوفات':'Product moved to Deleted Items');
+                    this.productCatalog.splice(actualIndex, 1);
+                    this.deletedCatalog = this.mergeDeletedItems(this.deletedCatalog, [deletedItem], 'catalog');
+                    const saved = await this.persistAppState('delete-catalog');
+                    if (!saved) {
+                        this.showToast(this.lang === 'ar'
+                            ? 'تم تثبيت الحذف، لكن تعذرت مزامنة الدليل بالكامل. أعد تحميل الصفحة للتحقق.'
+                            : 'Deletion tombstone was saved, but the catalog sync did not finish. Reload to verify.', 'error');
+                        return;
+                    }
+                    this.showToast(this.lang === 'ar' ? 'تم نقل الصنف إلى المحذوفات' : 'Product moved to Deleted Items');
                 },
                 async restoreDeletedCatalog(item) {
                     const key=this.getCatalogKey(item);
